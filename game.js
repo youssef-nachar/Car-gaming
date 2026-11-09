@@ -1,6 +1,6 @@
 /* STREET RACING 41000 — Graphics Edition
    Sunset / night city, textured facades with lit windows, PBR car paint + reflections,
-   headlight beams, particles, building collisions, minimap, nitro and engine audio.
+   headlight beams, particles, obstacle collisions, minimap, nitro and engine audio.
    Keys (host): WASD/arrows drive, SHIFT nitro, N day/night. Add ?night to the URL to start at night. */
 (() => {
 'use strict';
@@ -81,28 +81,48 @@ function makeRoads(){
  inst(new THREE.BoxGeometry(.6,.02,2.4),M.white,zx);inst(new THREE.BoxGeometry(2.4,.02,.6),M.white,zz);
 }
 function makeTree(x,z,s=1){const g=new THREE.Group();g.position.set(x,0,z);g.scale.setScalar(s);scene.add(g);cyl(.18,.25,1.8,M.trunk,0,.9,0,g,8);const c=mesh(new THREE.IcosahedronGeometry(1.3,1),M.leaf,0,2.4,0,g);c.scale.set(1,1.15,1);mesh(new THREE.IcosahedronGeometry(.9,1),M.leaf,.5,3.1,.2,g)}
-function building(x,z,w,d,h){
- const ox=rnd(),oy=rnd(),g=new THREE.BoxGeometry(w,h,d),uv=g.attributes.uv;
- for(let i=0;i<uv.count;i++){const wd=(i>>2)<2?d:w;uv.setXY(i,uv.getX(i)*wd/19.2+ox,uv.getY(i)*h/27+oy)}
- const m=new THREE.MeshStandardMaterial({color:BC[rnd()*BC.length|0],map:facadeMap,emissiveMap:facadeEm,emissive:0xffffff,emissiveIntensity:TODS[tod].win,roughness:.6,metalness:.1,envMapIntensity:.5});bMats.push(m);
- mesh(g,m,x,h/2+.5,z);
- box(w+.4,.5,d+.4,M.concrete,x,.25,z);
- box(w+.3,.4,d+.3,roofMats[rnd()*4|0],x,h+.7,z);
- if(rnd()<.7)box(1.8,1,1.8,M.concrete,x+(rnd()-.5)*w*.5,h+1.4,z+(rnd()-.5)*d*.5);
- if(rnd()<.35)cyl(.05,.07,5,M.pole,x+w*.3,h+3.2,z,scene,6);
- box(w*.8,2.3,.12,shopMat,x,1.8,z+d/2+.07);
- const a=box(w*.85,.16,1,awnings[rnd()*4|0],x,3.1,z+d/2+.5);a.rotation.x=.25;
- solids.push({x0:x-w/2,x1:x+w/2,z0:z-d/2,z1:z+d/2});
+/* ---------- obstacles (replace the old buildings) ----------
+   Every city block is now an open paved lot with scattered obstacles you can crash into.
+   Tweak OBST below: fill = chance a slot gets an obstacle (0..1), gap = slot spacing, cols = slots per row. */
+const OBST={cols:3,gap:4.8,fill:.62,reach:7};
+const obM={
+ barrier:mat(0xd9d6cc,.8),
+ stripe:new THREE.MeshStandardMaterial({color:0xff7a1a,roughness:.5,emissive:0xff5a00,emissiveIntensity:.3}),
+ crate:mat(0x9a6b3c,.85),crate2:mat(0x7a5530,.9),
+ barrel:mat(0xc23b32,.5,.3),cone:new THREE.MeshStandardMaterial({color:0xff6a1f,roughness:.5,emissive:0xff4a00,emissiveIntensity:.2}),
+ cont:[0x2f6fa8,0xb24a3a,0x3f8a5a,0xc99a2e].map(c=>mat(c,.55,.3)),
+ pave:mat(0x8d9190,.95)
+};
+const OBST_TYPES=6;
+function obstacle(type,cx,cz,ox,oz){
+ const g=new THREE.Group(),turn=rnd()<.5,rot=turn?Math.PI/2:0;let w=2,d=2;
+ switch(type){
+  case 0:{w=3.8;d=1.3;box(w,.4,d,obM.barrier,0,.2,0,g);box(w,.8,.8,obM.barrier,0,.8,0,g);box(w+.02,.2,.82,obM.stripe,0,.95,0,g);break}
+  case 1:{w=d=2.2;box(2.2,2.2,2.2,obM.crate,0,1.1,0,g);if(rnd()<.5)box(1.6,1.6,1.6,obM.crate2,.2,3,0,g);break}
+  case 2:{w=5.6;d=2.4;box(w,2.6,d,obM.cont[rnd()*4|0],0,1.3,0,g);for(let i=-2;i<=2;i++)box(.1,2.5,d+.1,M.dark,i*1.1,1.3,0,g);break}
+  case 3:{w=d=2;for(let i=0;i<3;i++)cyl(.85,.85,.6,M.tire,0,.3+i*.6,0,g,16);break}
+  case 4:{w=d=2.4;[[-.6,-.5],[.6,-.4],[0,.6]].forEach(p=>cyl(.55,.55,1.2,obM.barrel,p[0],.6,p[1],g,14));break}
+  default:{w=d=1.8;[[-.5,-.4],[.5,-.3],[0,.5]].forEach(p=>mesh(new THREE.ConeGeometry(.45,1.2,12),obM.cone,p[0],.6,p[1],g))}
+ }
+ const bw=turn?d:w,bd=turn?w:d;
+ const lim=OBST.reach;ox=clamp(ox,-(lim-bw/2),lim-bw/2);oz=clamp(oz,-(lim-bd/2),lim-bd/2);
+ const x=cx+ox,z=cz+oz;g.position.set(x,0,z);g.rotation.y=rot;scene.add(g);
+ solids.push({x0:x-bw/2,x1:x+bw/2,z0:z-bd/2,z1:z+bd/2});
+}
+function obstacleBlock(cx,cz){
+ flat(14,.12,14,obM.pave,cx,-.04,cz);
+ const c=OBST.cols,half=(c-1)/2;
+ for(let i=0;i<c;i++)for(let j=0;j<c;j++){
+  if(rnd()>OBST.fill)continue;
+  obstacle(rnd()*OBST_TYPES|0,cx,cz,(i-half)*OBST.gap+(rnd()-.5)*1.2,(j-half)*OBST.gap+(rnd()-.5)*1.2);
+ }
 }
 function makeCity(){
- const LW=12.4,H=()=>10+rnd()*14+(rnd()<.18?rnd()*18:0);
+ const LW=12.4;
  for(let gx=-4;gx<4;gx++)for(let gz=-4;gz<4;gz++){
   const cx=(gx+.5)*S,cz=(gz+.5)*S;
   if((gx===-1&&gz===1)||(gx===2&&gz===-2)){flat(LW,.18,LW,M.grass2,cx,0,cz);for(let i=0;i<6;i++)makeTree(cx-5+i*2,cz+(i%2?3.5:-3.5),.9);continue}
-  const t=rnd()*3|0;
-  if(t===0)building(cx,cz,LW,LW,H());
-  else if(t===1){building(cx,cz-3.2,LW,6,H());building(cx,cz+3.2,LW,6,H())}
-  else{building(cx-3.2,cz,6,LW,H());building(cx+3.2,cz,6,LW,H())}
+  obstacleBlock(cx,cz);
  }
  const L=[],pos=[];
  for(let k=-4;k<=4;k++)for(let q=-4;q<=4;q++)L.push([k*S-R-.55,q*S-R-.55]);
@@ -235,7 +255,7 @@ const tb=document.createElement('button');tb.className='icon-btn';tb.id='tod-btn
 const MMS=168,K=MMS/(CITY.limit*2),mm=document.createElement('canvas');mm.width=mm.height=MMS;
 mm.style.cssText='position:fixed;right:18px;bottom:18px;width:168px;height:168px;border-radius:18px;border:1px solid #ffffff30;display:none;pointer-events:none;box-shadow:0 10px 30px #0008';document.body.appendChild(mm);
 const mmBase=document.createElement('canvas');mmBase.width=mmBase.height=MMS;
-(()=>{const g=mmBase.getContext('2d');g.fillStyle='#16222d';g.fillRect(0,0,MMS,MMS);g.fillStyle='#4a5662';for(let i=-4;i<=4;i++){const c=MMS/2+i*S*K;g.fillRect(c-R*K,0,CITY.road*K,MMS);g.fillRect(0,c-R*K,MMS,CITY.road*K)}g.fillStyle='#2c3b48';solids.forEach(b=>g.fillRect(MMS/2+b.x0*K,MMS/2+b.z0*K,(b.x1-b.x0)*K,(b.z1-b.z0)*K))})();
+(()=>{const g=mmBase.getContext('2d');g.fillStyle='#16222d';g.fillRect(0,0,MMS,MMS);g.fillStyle='#4a5662';for(let i=-4;i<=4;i++){const c=MMS/2+i*S*K;g.fillRect(c-R*K,0,CITY.road*K,MMS);g.fillRect(0,c-R*K,MMS,CITY.road*K)}g.fillStyle='#2c3b48';g.fillStyle='#ff8a3d';solids.forEach(b=>g.fillRect(MMS/2+b.x0*K,MMS/2+b.z0*K,Math.max(3,(b.x1-b.x0)*K),Math.max(3,(b.z1-b.z0)*K)))})();
 const nitro=document.createElement('div');nitro.style.cssText='position:fixed;left:50%;bottom:22px;transform:translateX(-50%);width:230px;display:none;pointer-events:none;font:900 9px Inter,sans-serif;letter-spacing:2px;color:#ffcf68;text-align:center';
 nitro.innerHTML='NITRO<div style="margin-top:5px;height:8px;border-radius:6px;background:#101923b8;border:1px solid #ffffff30;overflow:hidden"><div id="nitro-fill" style="height:100%;width:100%;background:linear-gradient(90deg,#ffcf68,#ff7a3d)"></div></div>';document.body.appendChild(nitro);
 function drawMap(focus,cv){const g=(cv||mm).getContext('2d');g.drawImage(mmBase,0,0);if(pickup){const x=MMS/2+pickup.x*K,y=MMS/2+pickup.z*K;g.fillStyle='#ff4d6d';g.strokeStyle='#fff';g.lineWidth=1.5;g.beginPath();g.arc(x,y,4.5+Math.sin(performance.now()/180)*1.5,0,7);g.fill();g.stroke()}for(const p of players.values()){const x=MMS/2+p.x*K,y=MMS/2+p.z*K;g.fillStyle=p.color;g.beginPath();g.arc(x,y,p===focus?4:3,0,7);g.fill();if(p===focus){g.strokeStyle='#fff';g.lineWidth=1.5;g.beginPath();g.moveTo(x,y);g.lineTo(x+Math.sin(p.angle)*10,y-Math.cos(p.angle)*10);g.stroke()}}}
@@ -273,7 +293,7 @@ function update(dt){
   p.lat=p.speed*p.speed*Math.tan(p.delta)/2.7;p.angle+=p.speed/2.7*Math.tan(p.delta)*dt;
   if(Math.abs(p.lat)>30)p.speed*=Math.pow(.985,dt*60);
   p.x+=Math.sin(p.angle)*p.speed*dt;p.z-=Math.cos(p.angle)*p.speed*dt;
-  if(roadDistance(p.x,p.z)>R)p.speed*=Math.pow(.93,dt*60);
+  if(roadDistance(p.x,p.z)>R)p.speed*=Math.pow(.985,dt*60);
   if(Math.abs(p.x)>CITY.limit-3||Math.abs(p.z)>CITY.limit-3){p.speed*=.75;p.x=clamp(p.x,-CITY.limit+3,CITY.limit-3);p.z=clamp(p.z,-CITY.limit+3,CITY.limit-3)}
   collide(p);
   const sn=Math.sin(p.angle),cs=Math.cos(p.angle),car=p.car,ud=car.userData;
