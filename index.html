@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#101923">
+<title>Street Racing 41000 • Open City Multiplayer</title>
+<link rel="stylesheet" href="./style.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+<script type="module">
+const sources = [
+  'https://cdn.jsdelivr.net/npm/three@0.160.0/+esm',
+  'https://esm.sh/three@0.160.0',
+  'https://unpkg.com/three@0.160.0/build/three.module.js'
+];
+let THREE = null;
+for (const url of sources) {
+  try {
+    const lib = await import(url);
+    if (lib && lib.Scene && lib.WebGLRenderer) { THREE = lib; break; }
+  } catch (error) { console.warn('Three.js source unavailable:', url, error); }
+}
+if (THREE) {
+  window.THREE = THREE;
+  const script = document.createElement('script');
+  script.src = './game.js';
+  script.onerror = () => showError('تعذر تحميل game.js. تأكد من وجوده بجانب index.html.');
+  document.body.appendChild(script);
+} else showError('تعذر تحميل مكتبة Three.js. تحقق من اتصال الإنترنت.');
+function showError(message) {
+  const box = document.createElement('div');
+  box.className = 'fatal-error';
+  const title = document.createElement('h2'); title.textContent = 'مشكلة في تشغيل اللعبة';
+  const msg = document.createElement('p'); msg.textContent = message;
+  const retry = document.createElement('button'); retry.textContent = 'إعادة المحاولة';
+  retry.onclick = () => location.reload();
+  box.append(title,msg,retry); document.body.appendChild(box);
+}
+</script>
+</head>
+<body class="host">
+<canvas id="gameCanvas"></canvas>
+<div class="hud">
+  <header>
+    <div class="brand"><span class="brand-mark">🏎️</span><div><strong>STREET RACING</strong><small>OPEN CITY • MULTIPLAYER 41000</small></div></div>
+    <div class="top-actions"><span id="connection-pill" class="pill">● CONNECTING</span><button id="pause-btn" class="icon-btn" title="Pause">Ⅱ</button><button id="sound-btn" class="icon-btn" title="Toggle sound">♫</button></div>
+  </header>
+  <section class="lobby glass" id="lobby">
+    <div class="eyebrow">OPEN-WORLD CITY DRIVE</div><h1>Own the<br><em>streets.</em></h1>
+    <p>Scan the QR code with each phone to join the city as a driver.</p>
+    <div class="join-grid"><div id="qrcode" class="qr"></div><div><div class="label">ROOM CODE</div><div id="room-code" class="room-code">Generating…</div><div id="host-status" class="status">Starting connection…</div><button id="copy-link" class="secondary">COPY INVITE LINK ↗</button><button id="start-game-btn" class="primary start-game">ENTER CITY <span>▶</span></button></div></div>
+    <div class="lobby-footer"><span>UP TO 8 DRIVERS</span><span>WASD / ARROWS OR PHONE CONTROLLER</span></div>
+  </section>
+  <section class="race-hud" id="race-hud" hidden>
+    <div class="race-title"><span class="eyebrow">FREE DRIVE <b>• CITY MODE</b></span><strong id="timer">00:00</strong></div>
+    <div id="leaderboard" class="leaderboard"></div>
+    <div class="speed-panel"><strong id="speed-value">0</strong><span>KM/H</span></div>
+    <div class="race-message" id="race-message">WELCOME TO THE CITY</div>
+  </section>
+  <div class="bottom-hint" id="bottom-hint">WAITING FOR DRIVERS <span>✦</span> CONNECT A PHONE TO START</div>
+</div>
+</body></html>
