@@ -536,6 +536,57 @@ body.lefty .arrow-zone {
     padding: 0 10px 0 0
 }
 
+/* FIRE button (missile / mine) */
+.fire {
+    flex: 0 0 auto;
+    align-self: flex-end;
+    width: clamp(70px, 22vh, 92px);
+    height: clamp(70px, 22vh, 92px);
+    border-radius: 50%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    font-weight: 900;
+    color: #7d8c99;
+    border: 1px solid #ffffff22;
+    background: linear-gradient(180deg, #243849, #141f2a);
+    box-shadow: 0 6px 14px #0006, inset 0 1px 0 #ffffff1f;
+    opacity: .5;
+    transition: transform .06s, opacity .15s
+}
+
+.fire span {
+    font-size: 26px;
+    line-height: 1
+}
+
+.fire b {
+    font-size: 9px;
+    letter-spacing: 2.5px
+}
+
+.fire.ready {
+    opacity: 1;
+    color: #ffe08a;
+    border-color: #ffc65c;
+    box-shadow: 0 0 18px #ffb34d88, 0 6px 14px #0006, inset 0 1px 0 #ffffff1f;
+    animation: firepulse 1.1s ease-in-out infinite
+}
+
+.fire.on {
+    transform: scale(.93);
+    background: linear-gradient(180deg, #ffc65c, #d17a30);
+    color: #1b1208
+}
+
+@keyframes firepulse {
+    50% {
+        box-shadow: 0 0 28px #ffb34dcc, 0 6px 14px #0006, inset 0 1px 0 #ffffff1f
+    }
+}
+
 .lives {
     color: #ff3b5c;
     font-size: 15px;
