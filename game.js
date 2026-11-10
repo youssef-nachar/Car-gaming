@@ -279,7 +279,7 @@ peer.on('connection',conn=>{
  const p=spawnPlayer(conn.peer,'DRIVER '+(players.size+1),colors[players.size%colors.length],players.size);p.conn=conn;
  conn.on('open',()=>conn.send({type:'init',color:p.color,name:p.name}));
  conn.on('data',data=>{if(!data||typeof data!=='object')return;if(data.type==='input'){p.input=data.input||{};p.lastIn=performance.now()}if(data.type==='pause')$('#pause-btn').click();if(data.type==='name'&&typeof data.name==='string')p.name=data.name.slice(0,14);if(data.type==='view')toggleView(p);if(data.type==='camclose')p.camOff=true});
- conn.on('close',()=>{scene.remove(p.car);if(p.cam)scene.remove(p.cam);if(p.hud)p.hud.el.remove();players.delete(conn.peer);refreshList()});
+ conn.on('close',()=>{stopFeed(p);scene.remove(p.car);if(p.cam)scene.remove(p.cam);if(p.hud)p.hud.el.remove();players.delete(conn.peer);refreshList()});
 });
 
 /* ---------- particles ---------- */
@@ -541,23 +541,30 @@ function updateCam(p,r,dt){
  p.camFov+=((p.view?(r.w<700?82:76):(r.w<700?70:62))+sp*.3+(p.boosting?9:0)-p.camFov)*Math.min(1,dt*4);
  cam.fov=p.camFov;cam.aspect=r.w/r.h;cam.updateProjectionMatrix()}
 /* ---------- first-person feed -> phone controller (small JPEG frames over the PeerJS data channel) ---------- */
-const feedCv=document.createElement('canvas');feedCv.width=320;feedCv.height=180;const feedCx=feedCv.getContext('2d');
+/* live first-person video: a real WebRTC video stream (hardware encoded, congestion controlled) instead of JPEG frames */
+function stopFeed(p){if(p._call){try{p._call.close()}catch(e){}p._call=null}if(p._fs){try{p._fs.getTracks().forEach(t=>t.stop())}catch(e){}p._fs=null}}
+function startFeed(p){
+ if(p._call)return;
+ if(!p._fc){p._fc=document.createElement('canvas');p._fc.width=480;p._fc.height=270;p._fx=p._fc.getContext('2d',{alpha:false})}
+ try{
+  const st=p._fs=p._fc.captureStream(30);
+  const vt=st.getVideoTracks()[0];if(vt&&'contentHint' in vt)vt.contentHint='motion';
+  const call=p._call=peer.call(p.conn.peer,st);if(!call)return;
+  call.on('close',()=>{if(p._call===call)p._call=null});call.on('error',()=>{if(p._call===call)p._call=null});
+  /* low latency: cap bitrate, prefer fps over resolution */
+  const tune=()=>{try{const pc=call.peerConnection;pc.getSenders().forEach(sn=>{if(!sn.track||sn.track.kind!=='video')return;const pa=sn.getParameters();if(!pa.encodings||!pa.encodings.length)pa.encodings=[{}];pa.encodings[0].maxBitrate=1500000;pa.encodings[0].maxFramerate=30;pa.degradationPreference='maintain-framerate';sn.setParameters(pa).catch(()=>{})})}catch(e){}};
+  setTimeout(tune,500);setTimeout(tune,2000);
+ }catch(e){console.warn('feed failed',e)}
+}
 function camStream(p,r,now){
  const c=p.conn;if(!c||!c.open)return;
  const want=p.view===1&&!p.camOff;
- if(p._cs!==want){p._cs=want;c.send({type:'cam',on:want})}
- /* live feed: ~20fps, never queue behind old frames (drop instead of delay) */
- if(!want||p._enc||now-(p._ft||0)<50)return;
- const dc=c.dataChannel;if(dc&&dc.bufferedAmount>24000)return;
+ if(p._cs!==want){p._cs=want;c.send({type:'cam',on:want});if(want)startFeed(p);else stopFeed(p)}
+ if(!want||!p._fx||now-(p._ft||0)<30)return;
  p._ft=now;
  const pr=renderer.getPixelRatio(),sw=r.w*pr,sh=r.h*pr;let cw=sw,ch=sh;
  if(sw/sh>16/9)cw=sh*16/9;else ch=sw*9/16;
- try{feedCx.drawImage(renderer.domElement,r.x*pr+(sw-cw)/2,r.y*pr+(sh-ch)/2,cw,ch,0,0,320,180)}catch(e){return}
- p._enc=true;
- feedCv.toBlob(b=>{
-  if(!b||!c.open){p._enc=false;return}
-  b.arrayBuffer().then(buf=>{p._enc=false;const d=c.dataChannel;if(c.open&&!(d&&d.bufferedAmount>24000))c.send({type:'frame',buf})}).catch(()=>{p._enc=false})
- },'image/jpeg',.5)
+ try{p._fx.drawImage(renderer.domElement,r.x*pr+(sw-cw)/2,r.y*pr+(sh-ch)/2,cw,ch,0,0,480,270)}catch(e){}
 }
 function render(now){
  const dt=Math.min((now-lastFrame)/1000,.04);lastFrame=now;update(dt);stepParticles(dt);clouds.rotation.y=now*4e-6;padTex.offset.y=-(now*.0012)%1;beaconMat.opacity=Math.floor(now/700)%2?1:.25;
