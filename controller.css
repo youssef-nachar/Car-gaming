@@ -6,6 +6,7 @@
 :root {
     --me: #59f4ff
 }
+
 html,
 body {
     margin: 0;
@@ -621,7 +622,7 @@ body.lefty .arrow-zone {
 }
 
 .cam-win img,
-.cam-win canvas {
+.cam-win video {
     width: 100%;
     height: 100%;
     object-fit: cover;
