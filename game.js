@@ -94,6 +94,36 @@ const obM={
  pave:mat(0x8d9190,.95)
 };
 const OBST_TYPES=6;
+/* movable obstacles: when a car hits one it is pushed, slides with friction, and bumps other obstacles */
+const movers=new Set();
+function syncOb(o){o.x0=o.x-o.hw;o.x1=o.x+o.hw;o.z0=o.z-o.hd;o.z1=o.z+o.hd;o.g.position.set(o.x,0,o.z)}
+function stepObstacles(dt){
+ const lim=CITY.limit-2,fr=Math.pow(.18,dt);
+ for(const o of movers){
+  o.x+=o.vx*dt;o.z+=o.vz*dt;o.vx*=fr;o.vz*=fr;
+  const sp=Math.hypot(o.vx,o.vz);
+  if(o.x>lim-o.hw){o.x=lim-o.hw;o.vx*=-.4}else if(o.x<-lim+o.hw){o.x=-lim+o.hw;o.vx*=-.4}
+  if(o.z>lim-o.hd){o.z=lim-o.hd;o.vz*=-.4}else if(o.z<-lim+o.hd){o.z=-lim+o.hd;o.vz*=-.4}
+  if(o.round)o.g.rotation.y+=sp*dt*.6*(o.vx>=0?1:-1);
+  syncOb(o);
+  for(const b of solids){
+   if(b===o)continue;
+   const ox=Math.min(o.x1,b.x1)-Math.max(o.x0,b.x0),oz=Math.min(o.z1,b.z1)-Math.max(o.z0,b.z0);
+   if(ox<=0||oz<=0)continue;
+   const tm=o.mass+b.mass;
+   if(ox<oz){
+    const s=o.x<b.x?-1:1;o.x+=s*ox*b.mass/tm;b.x-=s*ox*o.mass/tm;
+    const rv=o.vx-b.vx;if(s<0?rv>0:rv<0){const j=rv*1.25*o.mass*b.mass/tm;o.vx-=j/o.mass;b.vx+=j/b.mass}
+   }else{
+    const s=o.z<b.z?-1:1;o.z+=s*oz*b.mass/tm;b.z-=s*oz*o.mass/tm;
+    const rv=o.vz-b.vz;if(s<0?rv>0:rv<0){const j=rv*1.25*o.mass*b.mass/tm;o.vz-=j/o.mass;b.vz+=j/b.mass}
+   }
+   syncOb(o);syncOb(b);
+   if(Math.hypot(b.vx,b.vz)>.3)movers.add(b);
+  }
+  if(sp<.35){o.vx=o.vz=0;movers.delete(o)}
+ }
+}
 function obstacle(type,cx,cz,ox,oz){
  const g=new THREE.Group(),turn=rnd()<.5,rot=turn?Math.PI/2:0;let w=2,d=2;
  switch(type){
@@ -107,7 +137,7 @@ function obstacle(type,cx,cz,ox,oz){
  const bw=turn?d:w,bd=turn?w:d;
  const lim=OBST.reach;ox=clamp(ox,-(lim-bw/2),lim-bw/2);oz=clamp(oz,-(lim-bd/2),lim-bd/2);
  const x=cx+ox,z=cz+oz;g.position.set(x,0,z);g.rotation.y=rot;scene.add(g);
- solids.push({x0:x-bw/2,x1:x+bw/2,z0:z-bd/2,z1:z+bd/2});
+ solids.push({x0:x-bw/2,x1:x+bw/2,z0:z-bd/2,z1:z+bd/2,x,z,hw:bw/2,hd:bd/2,vx:0,vz:0,g,mass:[3,2,8,1.5,1,.5][type],round:type>=3});
 }
 function obstacleBlock(cx,cz){
  flat(14,.12,14,obM.pave,cx,-.04,cz);
@@ -255,10 +285,10 @@ const tb=document.createElement('button');tb.className='icon-btn';tb.id='tod-btn
 const MMS=168,K=MMS/(CITY.limit*2),mm=document.createElement('canvas');mm.width=mm.height=MMS;
 mm.style.cssText='position:fixed;right:18px;bottom:18px;width:168px;height:168px;border-radius:18px;border:1px solid #ffffff30;display:none;pointer-events:none;box-shadow:0 10px 30px #0008';document.body.appendChild(mm);
 const mmBase=document.createElement('canvas');mmBase.width=mmBase.height=MMS;
-(()=>{const g=mmBase.getContext('2d');g.fillStyle='#16222d';g.fillRect(0,0,MMS,MMS);g.fillStyle='#4a5662';for(let i=-4;i<=4;i++){const c=MMS/2+i*S*K;g.fillRect(c-R*K,0,CITY.road*K,MMS);g.fillRect(0,c-R*K,MMS,CITY.road*K)}g.fillStyle='#2c3b48';g.fillStyle='#ff8a3d';solids.forEach(b=>g.fillRect(MMS/2+b.x0*K,MMS/2+b.z0*K,Math.max(3,(b.x1-b.x0)*K),Math.max(3,(b.z1-b.z0)*K)))})();
+(()=>{const g=mmBase.getContext('2d');g.fillStyle='#16222d';g.fillRect(0,0,MMS,MMS);g.fillStyle='#4a5662';for(let i=-4;i<=4;i++){const c=MMS/2+i*S*K;g.fillRect(c-R*K,0,CITY.road*K,MMS);g.fillRect(0,c-R*K,MMS,CITY.road*K)}})();
 const nitro=document.createElement('div');nitro.style.cssText='position:fixed;left:50%;bottom:22px;transform:translateX(-50%);width:230px;display:none;pointer-events:none;font:900 9px Inter,sans-serif;letter-spacing:2px;color:#ffcf68;text-align:center';
 nitro.innerHTML='NITRO<div style="margin-top:5px;height:8px;border-radius:6px;background:#101923b8;border:1px solid #ffffff30;overflow:hidden"><div id="nitro-fill" style="height:100%;width:100%;background:linear-gradient(90deg,#ffcf68,#ff7a3d)"></div></div>';document.body.appendChild(nitro);
-function drawMap(focus,cv){const g=(cv||mm).getContext('2d');g.drawImage(mmBase,0,0);if(pickup){const x=MMS/2+pickup.x*K,y=MMS/2+pickup.z*K;g.fillStyle='#ff4d6d';g.strokeStyle='#fff';g.lineWidth=1.5;g.beginPath();g.arc(x,y,4.5+Math.sin(performance.now()/180)*1.5,0,7);g.fill();g.stroke()}for(const p of players.values()){const x=MMS/2+p.x*K,y=MMS/2+p.z*K;g.fillStyle=p.color;g.beginPath();g.arc(x,y,p===focus?4:3,0,7);g.fill();if(p===focus){g.strokeStyle='#fff';g.lineWidth=1.5;g.beginPath();g.moveTo(x,y);g.lineTo(x+Math.sin(p.angle)*10,y-Math.cos(p.angle)*10);g.stroke()}}}
+function drawMap(focus,cv){const g=(cv||mm).getContext('2d');g.drawImage(mmBase,0,0);g.fillStyle='#ff8a3d';for(const b of solids)g.fillRect(MMS/2+b.x0*K,MMS/2+b.z0*K,Math.max(3,(b.x1-b.x0)*K),Math.max(3,(b.z1-b.z0)*K));if(pickup){const x=MMS/2+pickup.x*K,y=MMS/2+pickup.z*K;g.fillStyle='#ff4d6d';g.strokeStyle='#fff';g.lineWidth=1.5;g.beginPath();g.arc(x,y,4.5+Math.sin(performance.now()/180)*1.5,0,7);g.fill();g.stroke()}for(const p of players.values()){const x=MMS/2+p.x*K,y=MMS/2+p.z*K;g.fillStyle=p.color;g.beginPath();g.arc(x,y,p===focus?4:3,0,7);g.fill();if(p===focus){g.strokeStyle='#fff';g.lineWidth=1.5;g.beginPath();g.moveTo(x,y);g.lineTo(x+Math.sin(p.angle)*10,y-Math.cos(p.angle)*10);g.stroke()}}}
 $('#start-game-btn').addEventListener('click',()=>{if(started)return;started=true;initAudio();if(!players.size)spawnPlayer('host','HOST',colors[0],0);$('#lobby').hidden=true;$('#race-hud').hidden=false;$('#bottom-hint').style.display='none';$('#race-message').textContent='FREE DRIVE — EXPLORE THE CITY';startedAt=performance.now();setTimeout(()=>$('#race-message').textContent='',2400)});
 $('#pause-btn').onclick=()=>{paused=!paused;$('#pause-btn').textContent=paused?'▶':'Ⅱ';$('#race-message').textContent=paused?'PAUSED':''};
 $('#sound-btn').onclick=()=>{soundOn=!soundOn;$('#sound-btn').style.color=soundOn?'':'#ff647c';initAudio()};
@@ -269,12 +299,15 @@ addEventListener('keyup',e=>keys[e.key.toLowerCase()]=false);
 function roadDistance(x,z){return Math.min(Math.abs(x-Math.round(x/S)*S),Math.abs(z-Math.round(z/S)*S))}
 function collide(p){
  for(const b of solids){const cx=clamp(p.x,b.x0,b.x1),cz=clamp(p.z,b.z0,b.z1),dx=p.x-cx,dz=p.z-cz,d=Math.hypot(dx,dz);
-  if(d<1.6){if(d>.001){p.x+=dx/d*(1.6-d);p.z+=dz/d*(1.6-d)}else p.x+=1.6;if(Math.abs(p.speed)>9)sparks(cx,cz,10);p.speed*=.6}}
+  if(d<1.6){let nx=1,nz=0;if(d>.001){nx=dx/d;nz=dz/d;p.x+=nx*(1.6-d);p.z+=nz*(1.6-d)}else p.x+=1.6;
+   const cvx=Math.sin(p.angle)*p.speed,cvz=-Math.cos(p.angle)*p.speed,closing=Math.max(0,-(cvx*nx+cvz*nz));
+   if(closing>.5){const k=10/(10+b.mass)*1.35;b.vx=clamp(b.vx-nx*closing*k,-38,38);b.vz=clamp(b.vz-nz*closing*k,-38,38);movers.add(b)}
+   if(Math.abs(p.speed)>9)sparks(cx,cz,10);p.speed*=1-.1-b.mass/(10+b.mass)*.55}}
  for(const q of players.values()){if(q===p)continue;const dx=p.x-q.x,dz=p.z-q.z,d=Math.hypot(dx,dz);
   if(d<3.4&&d>.001){const key=p.id<q.id?p.id+'|'+q.id:q.id+'|'+p.id;if(!pairDone.has(key)){pairDone.add(key);hitCheck(p,q,dx,dz,d)}const o=(3.4-d)/2;p.x+=dx/d*o;p.z+=dz/d*o;q.x-=dx/d*o;q.z-=dz/d*o;p.speed*=.92;q.speed*=.92;if(Math.abs(p.speed)>9)sparks(p.x-dx/2,p.z-dz/2,5)}}
 }
 function update(dt){
- if(paused)return;pairDone.clear();
+ if(paused)return;pairDone.clear();stepObstacles(dt);
  const first=players.values().next().value;
  for(const p of players.values()){
   const dead=p.wreck>0,inp=(dead||(p.lastIn&&performance.now()-p.lastIn>800))?{}:(p.input||{}),host=p===first&&!dead;
