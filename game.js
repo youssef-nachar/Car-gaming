@@ -226,7 +226,7 @@ function skidLogic(p,dt,brake,av,sn,cs){
  if((Math.abs(p.lat||0)>17&&av>8)||(brake>.5&&av>16)){p.skT=.03;for(const s of [-1,1])addSkid(p.x-sn*1.4+cs*.98*s,p.z+cs*1.4+sn*.98*s,p.angle)}
 }
 
-makeGround();makeRoads();makeCity();buildNeon();makeSkyline();makePads();
+makeGround();makeRoads();makeCity();buildNeon();makePads();
 
 /* ---------- time of day ---------- */
 const U=sky.material.uniforms,beamMat=new THREE.MeshBasicMaterial({color:0xffe9b0,transparent:true,opacity:.05,blending:THREE.AdditiveBlending,depthWrite:false,side:THREE.DoubleSide});
@@ -278,7 +278,7 @@ peer.on('connection',conn=>{
  if(players.size>=MAX_PLAYERS){conn.on('open',()=>conn.send({type:'full'}));setTimeout(()=>conn.close(),300);return}
  const p=spawnPlayer(conn.peer,'DRIVER '+(players.size+1),colors[players.size%colors.length],players.size);p.conn=conn;
  conn.on('open',()=>conn.send({type:'init',color:p.color,name:p.name}));
- conn.on('data',data=>{if(!data||typeof data!=='object')return;if(data.type==='input'){p.input=data.input||{};p.lastIn=performance.now()}if(data.type==='pause')$('#pause-btn').click();if(data.type==='name'&&typeof data.name==='string')p.name=data.name.slice(0,14);if(data.type==='view')toggleView(p)});
+ conn.on('data',data=>{if(!data||typeof data!=='object')return;if(data.type==='input'){p.input=data.input||{};p.lastIn=performance.now()}if(data.type==='pause')$('#pause-btn').click();if(data.type==='name'&&typeof data.name==='string')p.name=data.name.slice(0,14);if(data.type==='view')toggleView(p);if(data.type==='camclose')p.camOff=true});
  conn.on('close',()=>{scene.remove(p.car);if(p.cam)scene.remove(p.cam);if(p.hud)p.hud.el.remove();players.delete(conn.peer);refreshList()});
 });
 
@@ -434,7 +434,7 @@ cpart(new THREE.BoxGeometry(.34,.1,.04),ckM,0,.5,-.8);
 wheelG.position.set(0,-.3,-.72);wheelG.rotation.x=-.5;cockpit.add(wheelG);wheelG.add(wheelSpin);
 cpart(new THREE.TorusGeometry(.2,.024,10,28),ckM,0,0,0,wheelSpin);cpart(new THREE.BoxGeometry(.38,.035,.035),ckM,0,0,0,wheelSpin);cpart(new THREE.BoxGeometry(.035,.2,.035),ckM,0,-.1,0,wheelSpin);
 camera.add(cockpit);cockpit.visible=view===1;
-function toggleView(p){p=p||players.values().next().value;if(!p)return;p.view=p.view?0:1;hudSay(p,p.view?'FIRST PERSON VIEW':'CHASE VIEW',1400)}
+function toggleView(p){p=p||players.values().next().value;if(!p)return;p.view=p.view?0:1;p.camOff=false;hudSay(p,p.view?'FIRST PERSON VIEW':'CHASE VIEW',1400)}
 
 /* ---------- UI ---------- */
 const tb=document.createElement('button');tb.className='icon-btn';tb.id='tod-btn';tb.title='Day / Night (N)';tb.textContent='☾';tb.onclick=toggleTOD;$('.top-actions').insertBefore(tb,$('#pause-btn'));const vb=document.createElement('button');vb.className='icon-btn';vb.id='view-btn';vb.title='Camera view (C)';vb.textContent='📷';vb.onclick=()=>toggleView();$('.top-actions').insertBefore(vb,tb);
@@ -540,6 +540,21 @@ function updateCam(p,r,dt){
  if(p.shake>0){cam.position.x+=(Math.random()-.5)*p.shake*1.1;cam.position.y+=(Math.random()-.5)*p.shake*.9;cam.position.z+=(Math.random()-.5)*p.shake*1.1;p.shake=Math.max(0,p.shake-dt*2.2)}
  p.camFov+=((p.view?(r.w<700?82:76):(r.w<700?70:62))+sp*.3+(p.boosting?9:0)-p.camFov)*Math.min(1,dt*4);
  cam.fov=p.camFov;cam.aspect=r.w/r.h;cam.updateProjectionMatrix()}
+/* ---------- first-person feed -> phone controller (small JPEG frames over the PeerJS data channel) ---------- */
+const feedCv=document.createElement('canvas');feedCv.width=384;feedCv.height=216;const feedCx=feedCv.getContext('2d');
+function camStream(p,r,now){
+ const c=p.conn;if(!c||!c.open)return;
+ const want=p.view===1&&!p.camOff;
+ if(p._cs!==want){p._cs=want;c.send({type:'cam',on:want})}
+ if(!want||p._enc||now-(p._ft||0)<80)return;
+ const dc=c.dataChannel;if(dc&&dc.bufferedAmount>262144)return;
+ p._ft=now;
+ const pr=renderer.getPixelRatio(),sw=r.w*pr,sh=r.h*pr;let cw=sw,ch=sh;
+ if(sw/sh>16/9)cw=sh*16/9;else ch=sw*9/16;
+ try{feedCx.drawImage(renderer.domElement,r.x*pr+(sw-cw)/2,r.y*pr+(sh-ch)/2,cw,ch,0,0,384,216)}catch(e){return}
+ p._enc=true;
+ feedCv.toBlob(b=>{p._enc=false;if(!b||!c.open)return;b.arrayBuffer().then(buf=>{if(c.open)c.send({type:'frame',buf})})},'image/jpeg',.55)
+}
 function render(now){
  const dt=Math.min((now-lastFrame)/1000,.04);lastFrame=now;update(dt);stepParticles(dt);clouds.rotation.y=now*4e-6;padTex.offset.y=-(now*.0012)%1;beaconMat.opacity=Math.floor(now/700)%2?1:.25;
  if(now-(render.tl||0)>120){render.tl=now;for(const p of players.values())if(p.conn&&p.conn.open)p.conn.send({type:'tel',speed:Math.round(Math.abs(p.speed)*3.6),boost:Math.round(p.boost),lives:p.lives,item:p.item||''})}
@@ -572,7 +587,7 @@ function render(now){
    sun.target.position.set(p.x,0,p.z);sun.position.set(p.x+sunDir.x*130,sunDir.y*130,p.z+sunDir.z*130);
    sky.position.copy(cam.position);
    cam.add(cockpit);cockpit.visible=p.view===1;wheelSpin.rotation.z=-((p.delta||0)/.58)*2.4;
-   renderer.render(scene,cam)});
+   renderer.render(scene,cam);camStream(p,r,now)});
  }else{
   renderer.setScissorTest(false);renderer.setViewport(0,0,W,H);
   camera.aspect=W/H;camera.updateProjectionMatrix();
