@@ -1,49 +1,521 @@
-*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
-:root{--me:#59f4ff}
-html,body{margin:0;width:100%;height:100%;overflow:hidden;background:radial-gradient(ellipse at 50% 0%,#20364a,#0b121b 70%);color:#f5f8fb;font-family:Inter,system-ui,Arial;touch-action:none;user-select:none;-webkit-user-select:none;overscroll-behavior:none}
-[hidden]{display:none!important}
-button{font-family:inherit;color:inherit;touch-action:none}
-.join-screen{min-height:100%;display:flex;flex-direction:column;justify-content:center;width:min(430px,100%);margin:auto;padding:28px;overflow:auto;touch-action:auto}
-.logo{font-size:14px;font-weight:900;letter-spacing:2px}
-.logo small{display:block;color:#91a6b6;font-size:9px;letter-spacing:2px;margin-top:5px}
-.join-screen h1{font-size:54px;line-height:.95;letter-spacing:-3px;margin:34px 0 12px}
-.join-screen h1 em{font-style:normal;color:#a7f36d}
-.join-screen p{color:#9fb0bd;font-size:13px;line-height:1.6;margin:0}
-.join-screen input{margin-top:14px;padding:17px;border:1px solid #ffffff2a;border-radius:13px;background:#172532;color:#fff;font-size:19px;letter-spacing:3px;text-align:center;outline:none;user-select:text;-webkit-user-select:text}
-.join-screen #name-input{font-size:14px;letter-spacing:2px;margin-top:22px}
-.join-screen button{margin-top:14px;padding:18px;border:0;border-radius:13px;background:linear-gradient(100deg,#b7f66e,#69e8c5);font-weight:900;letter-spacing:1px;color:#10201d;font-size:15px}
-.join-screen #status-msg{margin-top:15px;color:#aab3d0;font-size:12px;text-align:center}
-.gamepad{height:100dvh;display:flex;flex-direction:column;gap:8px;padding:calc(env(safe-area-inset-top) + 8px) calc(env(safe-area-inset-right) + 14px) calc(env(safe-area-inset-bottom) + 10px) calc(env(safe-area-inset-left) + 14px)}
-.gamepad header{display:flex;align-items:center;gap:9px}
-#my-color{border:1px solid var(--me);color:var(--me);border-radius:30px;padding:8px 13px;font-size:10px;font-weight:900;letter-spacing:1px;white-space:nowrap}
-.speed{display:flex;align-items:baseline;gap:5px;font-size:10px;color:#91a6b6}
-.speed b{font-size:30px;color:#fff;min-width:64px;text-align:right;font-variant-numeric:tabular-nums}
-.nitro{flex:1;height:9px;border-radius:6px;background:#ffffff14;border:1px solid #ffffff22;overflow:hidden;min-width:40px}
-#nitro-fill{display:block;height:100%;width:100%;background:linear-gradient(90deg,#ffcf68,#ff7a3d)}
-.mini{border:1px solid #ffffff25;background:#1a2a37;border-radius:10px;padding:10px 12px;font-size:9px;font-weight:800;letter-spacing:1px;white-space:nowrap}
-.mini:active{background:#2a4156}
-.controls{flex:1;min-height:0;display:flex;gap:16px;align-items:stretch}
-body.lefty .controls{flex-direction:row-reverse}
-.wheel-zone{flex:1.1;display:grid;place-items:center;min-width:0;min-height:0}
-.wheel{height:100%;aspect-ratio:1/1;max-width:100%;touch-action:none;border-radius:50%;background:radial-gradient(circle,#ffffff08 0 60%,#0000 61%)}
-.wheel-rot{width:100%;height:100%;will-change:transform;filter:drop-shadow(0 12px 22px #0008)}
-.wheel svg{width:100%;height:100%;display:block;pointer-events:none}
-.pedals{flex:1;display:grid;grid-template-columns:1fr 1.5fr;grid-template-rows:.7fr 1.6fr;gap:12px;min-width:0}
-.pedals button{border:1px solid #ffffff2a;border-radius:22px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;font-weight:900;letter-spacing:2px;box-shadow:0 14px 28px #0006,inset 0 2px 0 #ffffff30;transition:transform .05s,filter .05s}
-.pedals button span{font-size:34px;line-height:1}
-.pedals button b{font-size:13px}
-.boost{grid-column:1/3;background:linear-gradient(145deg,#ffd36e,#c2672a)}
-.boost span{font-size:24px!important}
-.brake{background:linear-gradient(145deg,#ff7a7a,#a52e4d)}
-.accel{background:linear-gradient(145deg,#b3f77a,#2f9b78)}
-.accel span{font-size:52px!important}
-.pedals button.on{transform:scale(.96);filter:brightness(1.25);box-shadow:0 0 0 3px #ffffff30,0 0 30px #a7f36d66}
-.lost,.rotate{position:fixed;inset:0;display:grid;place-items:center;text-align:center;font-weight:900;letter-spacing:2px;font-size:16px;line-height:1.6}
-.lost{background:#0b121bcc;z-index:9;color:#ffcf65}
-.rotate{display:none;background:#0b121bf5;z-index:10;font-size:20px}
-.lost small,.rotate small{display:block;font-size:11px;color:#91a6b6;letter-spacing:1px;margin-top:8px;font-weight:600}
-@media(orientation:portrait){body.playing .rotate{display:grid}}
-@media(max-height:380px){.mini{padding:8px 9px}.speed b{font-size:24px}.pedals{gap:8px}.controls{gap:10px}}
+* {
+    box-sizing: border-box;
+    -webkit-tap-highlight-color: transparent
+}
 
-.lives{color:#ff3b5c;font-size:15px;letter-spacing:1px;white-space:nowrap}
-@media(max-height:380px){.lives{font-size:12px}}
+:root {
+    --me: #59f4ff
+}
+
+html,
+body {
+    margin: 0;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    background: radial-gradient(ellipse at 50% 0%, #20364a, #0b121b 70%);
+    color: #f5f8fb;
+    font-family: Inter, system-ui, Arial;
+    touch-action: none;
+    user-select: none;
+    -webkit-user-select: none;
+    overscroll-behavior: none
+}
+
+[hidden] {
+    display: none !important
+}
+
+button {
+    font-family: inherit;
+    color: inherit;
+    touch-action: none
+}
+
+.join-screen {
+    min-height: 100%;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    width: min(430px, 100%);
+    margin: auto;
+    padding: 28px;
+    overflow: auto;
+    touch-action: auto
+}
+
+.logo {
+    font-size: 14px;
+    font-weight: 900;
+    letter-spacing: 2px
+}
+
+.logo small {
+    display: block;
+    color: #91a6b6;
+    font-size: 9px;
+    letter-spacing: 2px;
+    margin-top: 5px
+}
+
+.join-screen h1 {
+    font-size: 54px;
+    line-height: .95;
+    letter-spacing: -3px;
+    margin: 34px 0 12px
+}
+
+.join-screen h1 em {
+    font-style: normal;
+    color: #a7f36d
+}
+
+.join-screen p {
+    color: #9fb0bd;
+    font-size: 13px;
+    line-height: 1.6;
+    margin: 0
+}
+
+.join-screen input {
+    margin-top: 14px;
+    padding: 17px;
+    border: 1px solid #ffffff2a;
+    border-radius: 13px;
+    background: #172532;
+    color: #fff;
+    font-size: 19px;
+    letter-spacing: 3px;
+    text-align: center;
+    outline: none;
+    user-select: text;
+    -webkit-user-select: text
+}
+
+.join-screen #name-input {
+    font-size: 14px;
+    letter-spacing: 2px;
+    margin-top: 22px
+}
+
+.join-screen button {
+    margin-top: 14px;
+    padding: 18px;
+    border: 0;
+    border-radius: 13px;
+    background: linear-gradient(100deg, #b7f66e, #69e8c5);
+    font-weight: 900;
+    letter-spacing: 1px;
+    color: #10201d;
+    font-size: 15px
+}
+
+.join-screen #status-msg {
+    margin-top: 15px;
+    color: #aab3d0;
+    font-size: 12px;
+    text-align: center
+}
+
+.gamepad {
+    height: 100dvh;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: calc(env(safe-area-inset-top) + 8px) calc(env(safe-area-inset-right) + 14px) calc(env(safe-area-inset-bottom) + 10px) calc(env(safe-area-inset-left) + 14px)
+}
+
+.gamepad header {
+    display: flex;
+    align-items: center;
+    gap: 9px
+}
+
+#my-color {
+    border: 1px solid var(--me);
+    color: var(--me);
+    border-radius: 30px;
+    padding: 8px 13px;
+    font-size: 10px;
+    font-weight: 900;
+    letter-spacing: 1px;
+    white-space: nowrap
+}
+
+.speed {
+    display: flex;
+    align-items: baseline;
+    gap: 5px;
+    font-size: 10px;
+    color: #91a6b6
+}
+
+.speed b {
+    font-size: 30px;
+    color: #fff;
+    min-width: 64px;
+    text-align: right;
+    font-variant-numeric: tabular-nums
+}
+
+.nitro {
+    flex: 1;
+    height: 9px;
+    border-radius: 6px;
+    background: #ffffff14;
+    border: 1px solid #ffffff22;
+    overflow: hidden;
+    min-width: 40px
+}
+
+#nitro-fill {
+    display: block;
+    height: 100%;
+    width: 100%;
+    background: linear-gradient(90deg, #ffcf68, #ff7a3d)
+}
+
+.mini {
+    border: 1px solid #ffffff25;
+    background: #1a2a37;
+    border-radius: 10px;
+    padding: 10px 12px;
+    font-size: 9px;
+    font-weight: 800;
+    letter-spacing: 1px;
+    white-space: nowrap
+}
+
+.mini:active {
+    background: #2a4156
+}
+
+.controls {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    gap: 16px;
+    align-items: stretch
+}
+
+body.lefty .controls {
+    flex-direction: row-reverse
+}
+
+.wheel-zone {
+    flex: 1.1;
+    display: grid;
+    place-items: center;
+    min-width: 0;
+    min-height: 0
+}
+
+.wheel {
+    height: 100%;
+    aspect-ratio: 1/1;
+    max-width: 100%;
+    touch-action: none;
+    border-radius: 50%;
+    background: radial-gradient(circle, #ffffff08 0 60%, #0000 61%)
+}
+
+.wheel-rot {
+    width: 100%;
+    height: 100%;
+    will-change: transform;
+    filter: drop-shadow(0 12px 22px #0008)
+}
+
+.wheel svg {
+    width: 100%;
+    height: 100%;
+    display: block;
+    pointer-events: none
+}
+
+.pedals {
+    flex: 1;
+    display: grid;
+    grid-template-columns: 1fr 1.5fr;
+    grid-template-rows: .7fr 1.6fr;
+    gap: 12px;
+    min-width: 0
+}
+
+.pedals button {
+    border: 1px solid #ffffff2a;
+    border-radius: 22px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    font-weight: 900;
+    letter-spacing: 2px;
+    box-shadow: 0 14px 28px #0006, inset 0 2px 0 #ffffff30;
+    transition: transform .05s, filter .05s
+}
+
+.pedals button span {
+    font-size: 34px;
+    line-height: 1
+}
+
+.pedals button b {
+    font-size: 13px
+}
+
+.boost {
+    grid-column: 1/3;
+    background: linear-gradient(145deg, #ffd36e, #c2672a)
+}
+
+.boost span {
+    font-size: 24px !important
+}
+
+.brake {
+    background: linear-gradient(145deg, #ff7a7a, #a52e4d)
+}
+
+.accel {
+    background: linear-gradient(145deg, #b3f77a, #2f9b78)
+}
+
+.accel span {
+    font-size: 52px !important
+}
+
+.pedals button.on {
+    transform: scale(.96);
+    filter: brightness(1.25);
+    box-shadow: 0 0 0 3px #ffffff30, 0 0 30px #a7f36d66
+}
+
+.lost,
+.rotate {
+    position: fixed;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    text-align: center;
+    font-weight: 900;
+    letter-spacing: 2px;
+    font-size: 16px;
+    line-height: 1.6
+}
+
+.lost {
+    background: #0b121bcc;
+    z-index: 9;
+    color: #ffcf65
+}
+
+.rotate {
+    display: none;
+    background: #0b121bf5;
+    z-index: 10;
+    font-size: 20px
+}
+
+.lost small,
+.rotate small {
+    display: block;
+    font-size: 11px;
+    color: #91a6b6;
+    letter-spacing: 1px;
+    margin-top: 8px;
+    font-weight: 600
+}
+
+@media(orientation:portrait) {
+    body.playing .rotate {
+        display: grid
+    }
+}
+
+@media(max-height:380px) {
+    .mini {
+        padding: 8px 9px
+    }
+
+    .speed b {
+        font-size: 24px
+    }
+
+    .pedals {
+        gap: 8px
+    }
+
+    .controls {
+        gap: 10px
+    }
+}
+
+/* finger-sized steering wheel (small visible wheel + larger invisible touch area) */
+.wheel {
+    position: relative;
+    width: min(120px, 34vh);
+    height: min(120px, 34vh);
+    max-width: 100%;
+    max-height: 100%;
+    aspect-ratio: auto
+}
+
+.wheel::after {
+    content: "";
+    position: absolute;
+    inset: -26px;
+    border-radius: 50%
+}
+
+/* arrow buttons mode */
+.arrow-zone {
+    flex: 1.1;
+    display: flex;
+    gap: 14px;
+    min-width: 0
+}
+
+.arrow {
+    flex: 1;
+    border: 1px solid #ffffff2a;
+    border-radius: 22px;
+    background: linear-gradient(145deg, #7fb4e0, #2b5c8a);
+    font-size: 54px;
+    line-height: 1;
+    color: #fff;
+    box-shadow: 0 14px 28px #0006, inset 0 2px 0 #ffffff30;
+    transition: transform .05s, filter .05s
+}
+
+.arrow.on {
+    transform: scale(.96);
+    filter: brightness(1.3);
+    box-shadow: 0 0 0 3px #ffffff30, 0 0 30px #59f4ff66
+}
+
+body:not(.arrows) .arrow-zone {
+    display: none
+}
+
+body.arrows .wheel-zone {
+    display: none
+}
+
+body.arrows #btn-sens {
+    display: none
+}
+
+/* professional compact pedals: dark glass buttons with a colored accent */
+.pedals {
+    flex: 0 0 auto;
+    align-self: flex-end;
+    width: min(280px, 44vw);
+    grid-template-columns: 1fr 1.25fr;
+    grid-template-rows: auto auto;
+    gap: 8px
+}
+
+.pedals button {
+    border-radius: 14px;
+    min-height: 0;
+    gap: 5px;
+    letter-spacing: 2px;
+    background: linear-gradient(180deg, #243849, #141f2a);
+    border: 1px solid #ffffff22;
+    box-shadow: 0 6px 14px #0006, inset 0 1px 0 #ffffff1f;
+    transition: transform .06s, background .06s, box-shadow .06s
+}
+
+.pedals button span,
+.pedals .boost span,
+.pedals .brake span,
+.pedals .accel span {
+    font-size: 18px !important;
+    line-height: 1
+}
+
+.pedals button b {
+    font-size: 10px;
+    letter-spacing: 2.5px
+}
+
+.pedals .boost {
+    grid-column: 1/3;
+    flex-direction: row;
+    height: clamp(32px, 11vh, 42px);
+    color: #ffc65c;
+    border-color: #ffb34d77
+}
+
+.pedals .brake {
+    height: clamp(66px, 25vh, 96px);
+    color: #ff8a9b;
+    border-color: #ff647c77
+}
+
+.pedals .accel {
+    height: clamp(66px, 25vh, 96px);
+    color: #b6f585;
+    border-color: #a7f36d77
+}
+
+.pedals button.on {
+    transform: scale(.97);
+    filter: none
+}
+
+.pedals .boost.on {
+    background: linear-gradient(180deg, #ffc65c, #d17a30);
+    color: #1b1208;
+    box-shadow: 0 0 16px #ffb34d88
+}
+
+.pedals .brake.on {
+    background: linear-gradient(180deg, #ff8a9b, #c23a58);
+    color: #1d0a10;
+    box-shadow: 0 0 16px #ff647c88
+}
+
+.pedals .accel.on {
+    background: linear-gradient(180deg, #b6f585, #38a883);
+    color: #0d1d12;
+    box-shadow: 0 0 16px #a7f36d88
+}
+
+/* same compact look for the arrow buttons */
+.arrow-zone {
+    align-self: flex-end;
+    height: clamp(80px, 32vh, 130px);
+    gap: 10px
+}
+
+.arrow {
+    font-size: 34px;
+    border-radius: 14px;
+    background: linear-gradient(180deg, #243849, #141f2a);
+    color: #8fd4ff;
+    border-color: #59f4ff55;
+    box-shadow: 0 6px 14px #0006, inset 0 1px 0 #ffffff1f
+}
+
+.arrow.on {
+    background: linear-gradient(180deg, #8fd4ff, #2b7fb8);
+    color: #07121b;
+    filter: none;
+    box-shadow: 0 0 16px #59f4ff88
+}
+
+.lives {
+    color: #ff3b5c;
+    font-size: 15px;
+    letter-spacing: 1px;
+    white-space: nowrap
+}
+
+@media(max-height:380px) {
+    .lives {
+        font-size: 12px
+    }
+}
