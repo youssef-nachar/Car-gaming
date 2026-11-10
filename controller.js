@@ -23,6 +23,7 @@
     if (peer && !peer.destroyed) return;
     try { peer = new Peer(undefined, { debug: 0 }) } catch (e) { return fail('PeerJS could not start.') }
     peer.on('open', link);
+    peer.on('call', attachCall);
     peer.on('disconnected', () => { if (wantLive && !peer.destroyed) setTimeout(() => { try { peer.reconnect() } catch { } }, 800) });
     peer.on('error', e => { if (e.type === 'peer-unavailable') return fail('Room not found. Check the code.'); if (!connected && wantLive) fail('Connection failed. Try again.') });
   }
@@ -49,24 +50,28 @@
       buzz(40); fs(); lockWake(); startLoop();
     }
     if (d.type === 'cam') setCam(!!d.on);
-    if (d.type === 'frame' && d.buf && camOn) { pendingBuf = d.buf; drawFrame() }
     if (d.type === 'full') fail('Room is full (8 drivers max).');
     if (d.type === 'tel') { if (typeof d.item === 'string') setItem(d.item); $('#spd').textContent = d.speed; $('#nitro-fill').style.width = clamp(d.boost, 0, 100) + '%'; if (typeof d.lives === 'number') { $('#lives').textContent = '♥'.repeat(d.lives) + '♡'.repeat(Math.max(0, 6 - d.lives)); if (lastLives !== null && d.lives < lastLives) buzz([140, 70, 140]); lastLives = d.lives } }
   }
   /* first-person road window */
   const camWin = $('#cam-win'); let camOn = false;
-  const camCv = $('#cam-img'), camCx = camCv.getContext('2d');
-  let pendingBuf = null, decoding = false;
-  /* latest-frame-wins: if frames arrive faster than we can decode, old ones are skipped so the view stays live */
-  function drawFrame() {
-    if (decoding || !pendingBuf) return;
-    const buf = pendingBuf; pendingBuf = null; decoding = true;
-    createImageBitmap(new Blob([buf], { type: 'image/jpeg' })).then(bmp => {
-      if (camOn) { camCx.drawImage(bmp, 0, 0, camCv.width, camCv.height); camWin.hidden = false }
-      bmp.close && bmp.close(); decoding = false; if (pendingBuf) drawFrame();
-    }).catch(() => { decoding = false });
+  const camVid = $('#cam-img'); let camCall = null;
+  function attachCall(call) {
+    if (camCall && camCall !== call) { try { camCall.close() } catch { } }
+    camCall = call; call.answer();
+    call.on('stream', st => {
+      camVid.srcObject = st;
+      try { const r = call.peerConnection.getReceivers().find(x => x.track && x.track.kind === 'video'); if (r && 'playoutDelayHint' in r) r.playoutDelayHint = 0; if (r && 'jitterBufferTarget' in r) r.jitterBufferTarget = 0 } catch { }
+      const p = camVid.play(); if (p && p.catch) p.catch(() => { });
+      if (camOn) camWin.hidden = false;
+    });
+    call.on('close', () => { if (camCall === call) { camCall = null; camVid.srcObject = null } });
   }
-  function setCam(on) { camOn = on; pendingBuf = null; if (!on) { camWin.hidden = true; camCx.clearRect(0, 0, camCv.width, camCv.height) } }
+  function setCam(on) {
+    camOn = on;
+    if (!on) { camWin.hidden = true; camVid.srcObject = null; if (camCall) { try { camCall.close() } catch { } camCall = null } }
+    else if (camVid.srcObject) camWin.hidden = false;
+  }
   $('#cam-x').addEventListener('click', () => { setCam(false); tx({ type: 'camclose' }); buzz(12) });
   function send(force) {
     const n = performance.now(); if (!connected || !conn || !conn.open) return;
