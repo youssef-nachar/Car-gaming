@@ -306,6 +306,47 @@ header {
     margin: 0 7px
 }
 
+/* extra polish: animated title, glowing lobby, softer HUD shadows */
+.lobby h1 em {
+    background: linear-gradient(90deg, #a7f36d, #59f4ff, #ff4fc8, #a7f36d);
+    background-size: 300% 100%;
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    animation: sr-hue 5s linear infinite;
+    filter: drop-shadow(0 0 18px #59f4ff55)
+}
+
+@keyframes sr-hue {
+    to {
+        background-position: 300% 0
+    }
+}
+
+.lobby {
+    animation: sr-glow 3.2s ease-in-out infinite
+}
+
+@keyframes sr-glow {
+    50% {
+        box-shadow: 0 25px 80px #0008, 0 0 38px #59f4ff33
+    }
+}
+
+.primary {
+    box-shadow: 0 0 24px #69e8c566;
+    transition: transform .12s
+}
+
+.primary:hover {
+    transform: translateY(-2px)
+}
+
+.race-title,
+.leaderboard {
+    box-shadow: 0 8px 24px #0006
+}
+
 .fatal-error {
     position: fixed;
     z-index: 99999;
