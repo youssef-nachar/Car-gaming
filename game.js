@@ -541,19 +541,23 @@ function updateCam(p,r,dt){
  p.camFov+=((p.view?(r.w<700?82:76):(r.w<700?70:62))+sp*.3+(p.boosting?9:0)-p.camFov)*Math.min(1,dt*4);
  cam.fov=p.camFov;cam.aspect=r.w/r.h;cam.updateProjectionMatrix()}
 /* ---------- first-person feed -> phone controller (small JPEG frames over the PeerJS data channel) ---------- */
-const feedCv=document.createElement('canvas');feedCv.width=384;feedCv.height=216;const feedCx=feedCv.getContext('2d');
+const feedCv=document.createElement('canvas');feedCv.width=320;feedCv.height=180;const feedCx=feedCv.getContext('2d');
 function camStream(p,r,now){
  const c=p.conn;if(!c||!c.open)return;
  const want=p.view===1&&!p.camOff;
  if(p._cs!==want){p._cs=want;c.send({type:'cam',on:want})}
- if(!want||p._enc||now-(p._ft||0)<80)return;
- const dc=c.dataChannel;if(dc&&dc.bufferedAmount>262144)return;
+ /* live feed: ~20fps, never queue behind old frames (drop instead of delay) */
+ if(!want||p._enc||now-(p._ft||0)<50)return;
+ const dc=c.dataChannel;if(dc&&dc.bufferedAmount>24000)return;
  p._ft=now;
  const pr=renderer.getPixelRatio(),sw=r.w*pr,sh=r.h*pr;let cw=sw,ch=sh;
  if(sw/sh>16/9)cw=sh*16/9;else ch=sw*9/16;
- try{feedCx.drawImage(renderer.domElement,r.x*pr+(sw-cw)/2,r.y*pr+(sh-ch)/2,cw,ch,0,0,384,216)}catch(e){return}
+ try{feedCx.drawImage(renderer.domElement,r.x*pr+(sw-cw)/2,r.y*pr+(sh-ch)/2,cw,ch,0,0,320,180)}catch(e){return}
  p._enc=true;
- feedCv.toBlob(b=>{p._enc=false;if(!b||!c.open)return;b.arrayBuffer().then(buf=>{if(c.open)c.send({type:'frame',buf})})},'image/jpeg',.55)
+ feedCv.toBlob(b=>{
+  if(!b||!c.open){p._enc=false;return}
+  b.arrayBuffer().then(buf=>{p._enc=false;const d=c.dataChannel;if(c.open&&!(d&&d.bufferedAmount>24000))c.send({type:'frame',buf})}).catch(()=>{p._enc=false})
+ },'image/jpeg',.5)
 }
 function render(now){
  const dt=Math.min((now-lastFrame)/1000,.04);lastFrame=now;update(dt);stepParticles(dt);clouds.rotation.y=now*4e-6;padTex.offset.y=-(now*.0012)%1;beaconMat.opacity=Math.floor(now/700)%2?1:.25;
