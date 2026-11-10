@@ -49,17 +49,24 @@
       buzz(40); fs(); lockWake(); startLoop();
     }
     if (d.type === 'cam') setCam(!!d.on);
-    if (d.type === 'frame' && d.buf && camOn) {
-      const im = $('#cam-img'), old = im.src, u = URL.createObjectURL(new Blob([d.buf], { type: 'image/jpeg' }));
-      im.onload = () => { if (old && old.startsWith('blob:')) URL.revokeObjectURL(old) };
-      im.src = u; camWin.hidden = false;
-    }
+    if (d.type === 'frame' && d.buf && camOn) { pendingBuf = d.buf; drawFrame() }
     if (d.type === 'full') fail('Room is full (8 drivers max).');
     if (d.type === 'tel') { if (typeof d.item === 'string') setItem(d.item); $('#spd').textContent = d.speed; $('#nitro-fill').style.width = clamp(d.boost, 0, 100) + '%'; if (typeof d.lives === 'number') { $('#lives').textContent = '♥'.repeat(d.lives) + '♡'.repeat(Math.max(0, 6 - d.lives)); if (lastLives !== null && d.lives < lastLives) buzz([140, 70, 140]); lastLives = d.lives } }
   }
   /* first-person road window */
   const camWin = $('#cam-win'); let camOn = false;
-  function setCam(on) { camOn = on; if (!on) { camWin.hidden = true; const im = $('#cam-img'); if (im.src.startsWith('blob:')) URL.revokeObjectURL(im.src); im.removeAttribute('src') } }
+  const camCv = $('#cam-img'), camCx = camCv.getContext('2d');
+  let pendingBuf = null, decoding = false;
+  /* latest-frame-wins: if frames arrive faster than we can decode, old ones are skipped so the view stays live */
+  function drawFrame() {
+    if (decoding || !pendingBuf) return;
+    const buf = pendingBuf; pendingBuf = null; decoding = true;
+    createImageBitmap(new Blob([buf], { type: 'image/jpeg' })).then(bmp => {
+      if (camOn) { camCx.drawImage(bmp, 0, 0, camCv.width, camCv.height); camWin.hidden = false }
+      bmp.close && bmp.close(); decoding = false; if (pendingBuf) drawFrame();
+    }).catch(() => { decoding = false });
+  }
+  function setCam(on) { camOn = on; pendingBuf = null; if (!on) { camWin.hidden = true; camCx.clearRect(0, 0, camCv.width, camCv.height) } }
   $('#cam-x').addEventListener('click', () => { setCam(false); tx({ type: 'camclose' }); buzz(12) });
   function send(force) {
     const n = performance.now(); if (!connected || !conn || !conn.open) return;
