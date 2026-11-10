@@ -621,7 +621,8 @@ body.lefty .arrow-zone {
     pointer-events: none
 }
 
-.cam-win img {
+.cam-win img,
+.cam-win canvas {
     width: 100%;
     height: 100%;
     object-fit: cover;
