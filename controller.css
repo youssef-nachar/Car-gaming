@@ -507,6 +507,35 @@ body.arrows #btn-sens {
     box-shadow: 0 0 16px #59f4ff88
 }
 
+/* PUBG-style layout: steering on the left (bottom corner), pedals on the right */
+.wheel-zone {
+    flex: 1;
+    display: flex;
+    align-items: flex-end;
+    justify-content: flex-start;
+    padding: 0 0 6px 18px
+}
+
+body.lefty .wheel-zone {
+    justify-content: flex-end;
+    padding: 0 18px 6px 0
+}
+
+.arrow-zone {
+    flex: 1;
+    justify-content: flex-start;
+    padding-left: 10px
+}
+
+.arrow {
+    flex: 0 0 clamp(80px, 22vw, 120px)
+}
+
+body.lefty .arrow-zone {
+    justify-content: flex-end;
+    padding: 0 10px 0 0
+}
+
 .lives {
     color: #ff3b5c;
     font-size: 15px;
