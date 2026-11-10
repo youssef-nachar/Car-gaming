@@ -76,6 +76,27 @@ const rel=e=>{if(e.pointerId!==wp)return;wp=null;spring=requestAnimationFrame(ba
 ['pointerup','pointercancel','lostpointercapture'].forEach(t=>wheel.addEventListener(t,rel));
 setSens();
 
+/* steering mode: WHEEL (small finger-sized wheel) or ARROWS (left / right buttons) */
+let mode=store.get('sr_mode')==='arrows'?'arrows':'wheel',dirL=0,dirR=0;
+function setMode(m){
+  mode=m;store.set('sr_mode',m);
+  document.body.classList.toggle('arrows',m==='arrows');
+  $('#btn-mode').textContent='STEER: '+(m==='arrows'?'ARROWS':'WHEEL');
+  cancelAnimationFrame(spring);rot=0;wrot.style.transform='';wp=null;dirL=dirR=0;state.steer=0;
+  $('#btn-left').classList.remove('on');$('#btn-right').classList.remove('on');send(true);
+}
+function dirBtn(id,side){
+  const b=$(id);let pid=null;
+  const set=v=>{if(side<0)dirL=v;else dirR=v;state.steer=dirR-dirL;b.classList.toggle('on',!!v);send(true)};
+  b.addEventListener('pointerdown',e=>{e.preventDefault();if(pid!==null)return;pid=e.pointerId;b.setPointerCapture(pid);buzz(10);set(1)});
+  const up=e=>{if(e.pointerId!==pid)return;pid=null;set(0)};
+  ['pointerup','pointercancel','lostpointercapture'].forEach(t=>b.addEventListener(t,up));
+  b.addEventListener('contextmenu',e=>e.preventDefault());
+}
+dirBtn('#btn-left',-1);dirBtn('#btn-right',1);
+$('#btn-mode').addEventListener('click',()=>{setMode(mode==='wheel'?'arrows':'wheel');buzz(12)});
+setMode(mode);
+
 /* pedals: pointer capture so a sliding finger can never leave a pedal stuck */
 function hold(id,key,vib){
   const b=$(id);let pid=null;
