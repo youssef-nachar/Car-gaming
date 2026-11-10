@@ -35,7 +35,7 @@
     c.on('error', () => { if (c === conn) lost() });
   }
   function lost() {
-    connected = false; state.steer = state.throttle = state.brake = state.boost = state.fire = 0;
+    setCam(false); connected = false; state.steer = state.throttle = state.brake = state.boost = state.fire = 0;
     if (!wantLive) return;
     if (!gamepad.hidden) lostEl.hidden = false;
     clearTimeout(retryT); retryT = setTimeout(link, 1500);
@@ -48,9 +48,19 @@
       const n = nameInput.value.trim(); if (n) tx({ type: 'name', name: n });
       buzz(40); fs(); lockWake(); startLoop();
     }
+    if (d.type === 'cam') setCam(!!d.on);
+    if (d.type === 'frame' && d.buf && camOn) {
+      const im = $('#cam-img'), old = im.src, u = URL.createObjectURL(new Blob([d.buf], { type: 'image/jpeg' }));
+      im.onload = () => { if (old && old.startsWith('blob:')) URL.revokeObjectURL(old) };
+      im.src = u; camWin.hidden = false;
+    }
     if (d.type === 'full') fail('Room is full (8 drivers max).');
     if (d.type === 'tel') { if (typeof d.item === 'string') setItem(d.item); $('#spd').textContent = d.speed; $('#nitro-fill').style.width = clamp(d.boost, 0, 100) + '%'; if (typeof d.lives === 'number') { $('#lives').textContent = '♥'.repeat(d.lives) + '♡'.repeat(Math.max(0, 6 - d.lives)); if (lastLives !== null && d.lives < lastLives) buzz([140, 70, 140]); lastLives = d.lives } }
   }
+  /* first-person road window */
+  const camWin = $('#cam-win'); let camOn = false;
+  function setCam(on) { camOn = on; if (!on) { camWin.hidden = true; const im = $('#cam-img'); if (im.src.startsWith('blob:')) URL.revokeObjectURL(im.src); im.removeAttribute('src') } }
+  $('#cam-x').addEventListener('click', () => { setCam(false); tx({ type: 'camclose' }); buzz(12) });
   function send(force) {
     const n = performance.now(); if (!connected || !conn || !conn.open) return;
     const s = { steer: +state.steer.toFixed(3), throttle: state.throttle, brake: state.brake, boost: state.boost, fire: state.fire }, k = JSON.stringify(s);
