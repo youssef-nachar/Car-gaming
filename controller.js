@@ -4,7 +4,7 @@
   const store = { get: k => { try { return localStorage.getItem(k) } catch { return null } }, set: (k, v) => { try { localStorage.setItem(k, v) } catch { } } };
   const joinBtn = $('#join-btn'), roomInput = $('#room-input'), nameInput = $('#name-input'), statusMsg = $('#status-msg');
   const joinScreen = $('#join-screen'), gamepad = $('#gamepad'), chip = $('#my-color'), lostEl = $('#lost');
-  let lastLives = null, peer = null, conn = null, room = '', connected = false, wantLive = false, raf = 0, lastSent = '', lastSend = 0, wake = null, retryT = 0;
+  let zoneOut = false, lastLives = null, peer = null, conn = null, room = '', connected = false, wantLive = false, raf = 0, lastSent = '', lastSend = 0, wake = null, retryT = 0;
   const state = { steer: 0, throttle: 0, brake: 0, boost: 0, fire: 0 };
   const params = new URLSearchParams(location.search);
   roomInput.value = (params.get('room') || store.get('sr_room') || '').toUpperCase(); nameInput.value = store.get('sr_name') || '';
@@ -46,12 +46,20 @@
     if (d.type === 'init') {
       connected = true; clearTimeout(retryT); joinScreen.hidden = true; gamepad.hidden = false; lostEl.hidden = true; document.body.classList.add('playing');
       chip.textContent = nameInput.value.trim() || d.name || 'DRIVER'; chip.style.color = chip.style.borderColor = d.color; document.documentElement.style.setProperty('--me', d.color);
-      const n = nameInput.value.trim(); if (n) tx({ type: 'name', name: n });
+      const n = nameInput.value.trim(); if (n) tx({ type: 'name', name: n }); tx({ type: 'car', model: carId });
       buzz(40); fs(); lockWake(); startLoop();
     }
+    if (d.type === 'end') {
+      state.steer = state.throttle = state.brake = state.boost = state.fire = 0; send(true);
+      $('#end-title').textContent = d.winner ? '🏆 YOU WIN!' : 'MATCH FINISHED';
+      $('#end-rank').textContent = '#' + d.rank; $('#end-rank').style.color = d.winner ? '#ffd24d' : '#a7f36d';
+      $('#end-info').textContent = d.score + ' PTS • ' + d.kills + ' WRECKS • ' + d.rank + ' / ' + d.total;
+      $('#end').hidden = false; buzz(d.winner ? [80, 60, 80, 60, 200] : [120]);
+    }
+    if (d.type === 'again') { $('#end').hidden = true; buzz(30) }
     if (d.type === 'cam') setCam(!!d.on);
     if (d.type === 'full') fail('Room is full (8 drivers max).');
-    if (d.type === 'tel') { if (typeof d.item === 'string') setItem(d.item); $('#spd').textContent = d.speed; $('#nitro-fill').style.width = clamp(d.boost, 0, 100) + '%'; if (typeof d.lives === 'number') { $('#lives').textContent = '♥'.repeat(d.lives) + '♡'.repeat(Math.max(0, 6 - d.lives)); if (lastLives !== null && d.lives < lastLives) buzz([140, 70, 140]); lastLives = d.lives } }
+    if (d.type === 'tel') { const zo = !!d.zo; if (zo !== zoneOut) { zoneOut = zo; document.body.classList.toggle('zonehit', zo); if (zo) buzz([60, 40, 60]) } if (typeof d.item === 'string') setItem(d.item, d.ic, d.am); $('#spd').textContent = d.speed; $('#nitro-fill').style.width = clamp(d.boost, 0, 100) + '%'; if (typeof d.lives === 'number') { $('#lives').textContent = '♥'.repeat(d.lives) + '♡'.repeat(Math.max(0, 6 - d.lives)); if (lastLives !== null && d.lives < lastLives) buzz([140, 70, 140]); lastLives = d.lives } }
   }
   /* first-person road window */
   const camWin = $('#cam-win'); let camOn = false;
@@ -81,6 +89,27 @@
     conn.send({ type: 'input', input: { ...s, accel: s.throttle > .05, left: s.steer < -.08, right: s.steer > .08 } });
   }
   function startLoop() { cancelAnimationFrame(raf); const loop = () => { send(); raf = requestAnimationFrame(loop) }; loop() }
+  /* car picker */
+  const CARS = [
+    { id: 'sport', n: 'SPORT', body: [[-2.1,.34],[-2.1,.8],[-1.3,.94],[1.25,.94],[2.1,.74],[2.1,.34]], cab: [[-1,.95],[-.62,1.34],[.45,1.36],[1,.95]], wr: .43, wz: 1.35 },
+    { id: 'super', n: 'SUPER', body: [[-2.15,.3],[-2.15,.62],[-1.1,.76],[1,.74],[2.2,.46],[2.2,.3]], cab: [[-.75,.75],[-.25,1.12],[.55,1.1],[1.15,.74]], wr: .42, wz: 1.4 },
+    { id: 'muscle', n: 'MUSCLE', body: [[-2.2,.34],[-2.2,.84],[-1.3,.92],[1.5,.94],[2.2,.72],[2.2,.34]], cab: [[-.75,.94],[-.35,1.3],[.6,1.3],[1,.94]], wr: .45, wz: 1.4 },
+    { id: 'suv', n: 'SUV', body: [[-2.1,.5],[-2.1,1.2],[-1.7,1.32],[1.6,1.32],[2.1,1.05],[2.1,.5]], cab: [[-1.8,1.32],[-1.6,1.9],[.9,1.9],[1.4,1.32]], wr: .55, wz: 1.35 },
+    { id: 'pickup', n: 'PICKUP', body: [[-2.2,.5],[-2.2,1],[.25,1.02],[1.1,1.02],[2.2,.85],[2.2,.5]], cab: [[.05,1.02],[.4,1.62],[1.05,1.62],[1.5,1.02]], wr: .54, wz: 1.45 },
+    { id: 'hatch', n: 'HATCH', body: [[-1.9,.36],[-1.9,.98],[-1.55,1.08],[1,1],[1.9,.74],[1.9,.36]], cab: [[-1.75,1],[-1.5,1.58],[.55,1.52],[1.15,1]], wr: .4, wz: 1.2 }
+  ];
+  let carId = store.get('sr_car'); if (!CARS.some(c => c.id === carId)) carId = 'sport';
+  const carPick = $('#car-pick');
+  const sx = x => (50 + x * 21).toFixed(1), sy = y => (46 - y * 16).toFixed(1), poly = pts => pts.map(p => sx(p[0]) + ',' + sy(p[1])).join(' ');
+  CARS.forEach(c => {
+    const b = document.createElement('button'); b.type = 'button'; b.className = 'car-card'; b.dataset.id = c.id;
+    b.innerHTML = '<svg viewBox="0 0 100 52"><polygon points="' + poly(c.body) + '" fill="#d3dee6"/><polygon points="' + poly(c.cab) + '" fill="#6f8aa0"/>' +
+      [-c.wz, c.wz].map(z => '<circle cx="' + sx(z) + '" cy="' + sy(c.wr) + '" r="' + (c.wr * 16).toFixed(1) + '" fill="#10161c" stroke="#9fb0bd" stroke-width="1.5"/>').join('') + '</svg>' + c.n;
+    b.addEventListener('click', () => { carId = c.id; store.set('sr_car', carId); mark(); buzz(10); if (connected) tx({ type: 'car', model: carId }) });
+    carPick.appendChild(b);
+  });
+  function mark() { carPick.querySelectorAll('.car-card').forEach(b => b.classList.toggle('sel', b.dataset.id === carId)) }
+  mark();
   joinBtn.addEventListener('click', connect);
   [roomInput, nameInput].forEach(i => i.addEventListener('keydown', e => { if (e.key === 'Enter') connect() }));
 
@@ -131,15 +160,16 @@
 
   /* FIRE: uses the item (missile / mine) picked up on the road. The signal is held ~170ms so a quick tap is never missed. */
   let lastItem = '';
-  function setItem(t) { const f = $('#btn-fire'); f.classList.toggle('ready', !!t); $('#fire-ico').textContent = t === 'missile' ? '🚀' : t === 'mine' ? '💣' : '•'; if (t && t !== lastItem) buzz(30); lastItem = t }
+  function setItem(t, ic, am) { const f = $('#btn-fire'); f.classList.toggle('ready', !!t); $('#fire-ico').textContent = t ? (ic || '🎯') : '•'; f.querySelector('b').textContent = t && am > 1 ? 'x' + am : 'FIRE'; if (t && t !== lastItem) buzz(30); lastItem = t }
   {
     const b = $('#btn-fire');
-    b.addEventListener('pointerdown', e => { e.preventDefault(); state.fire = 1; b.classList.add('on'); buzz(25); send(true); clearTimeout(b._t); b._t = setTimeout(() => { state.fire = 0; send(true) }, 170) });
-    const up = () => b.classList.remove('on');
+    b.addEventListener('pointerdown', e => { e.preventDefault(); try { b.setPointerCapture(e.pointerId) } catch { } state.fire = 1; b._d = performance.now(); b.classList.add('on'); buzz(25); send(true); clearTimeout(b._t) });
+    const up = () => { b.classList.remove('on'); if (!state.fire) return; clearTimeout(b._t); b._t = setTimeout(() => { state.fire = 0; send(true) }, Math.max(0, 170 - (performance.now() - (b._d || 0)))) };
     ['pointerup', 'pointercancel', 'lostpointercapture', 'pointerleave'].forEach(t => b.addEventListener(t, up));
     b.addEventListener('contextmenu', e => e.preventDefault())
   }
 
+  $('#again-btn').addEventListener('click', () => { tx({ type: 'again' }); buzz(15) });
   $('#btn-view').addEventListener('click', () => { tx({ type: 'view' }); buzz(15) });
   $('#btn-pause').addEventListener('click', () => { tx({ type: 'pause' }); buzz(15) });
   $('#btn-sens').addEventListener('click', () => { sens = (sens + 1) % 3; store.set('sr_sens', sens); setSens(); rot = clamp(rot, -SENS[sens][1], SENS[sens][1]); applyRot(); buzz(12) });
