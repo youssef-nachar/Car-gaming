@@ -361,18 +361,16 @@ function hitCheck(p,q,dx,dz,d){const nx=dx/d,nz=dz/d,vp=[Math.sin(p.angle)*p.spe
  if(ip+iq<7)return;if(ip>iq*1.5)hurt(q,p);else if(iq>ip*1.5)hurt(p,q);else{hurt(p,q);hurt(q,p)}}
 function respawn(p){const s=roadSpot();p.x=s.x;p.z=s.z;p.angle=s.a;p.speed=0;p.delta=0;p.lives=RESPAWN_LIVES;p.wreck=0;p.inv=3;p.boost=100;drawHearts(p);say(`${p.name} IS BACK — ♥ ${p.lives}`,2000)}
 /* ---------- MATCH: timer, scoring, shrinking red zone, end screen ---------- */
-const MATCH_TIME=300;
+const MATCH_TIME=220; /* 3:40 — the zone finishes closing and the match ends */
 /* ---------- ZONE: multi-phase moving circle ----------
    pre = second when the NEXT safe circle is revealed (white), go = second it starts closing,
    dur = closing time (s), r = final radius, dmg = seconds between damage ticks outside the circle.
    Surviving inside at the end of a phase gives ZONE_BONUS points. */
 const ZONE_PH=[
- {pre:100,go:115,dur:25,r:110,dmg:2.0},
- {pre:140,go:155,dur:25,r:70,dmg:1.6},
- {pre:180,go:195,dur:25,r:42,dmg:1.2},
- {pre:220,go:235,dur:30,r:24,dmg:.9},
- {pre:265,go:270,dur:30,r:10,dmg:.7}
-],ZONE_START=MATCH_TIME-ZONE_PH[0].go,ZONE_MAX=170,ZONE_BONUS=20;
+ {pre:0,go:120,dur:15,r:50,dmg:2.0},   /* red zone starts small (ZONE_MAX) → at 2:00 it shrinks to r=50 */
+ {pre:135,go:180,dur:12,r:28,dmg:1.4}, /* 1 minute later (3:00) it shrinks again to r=28 */
+ {pre:192,go:210,dur:10,r:10,dmg:.9}   /* 30 s later (3:30) it shrinks more to r=10 … and 10 s later (3:40) it ends */
+],ZONE_START=MATCH_TIME-ZONE_PH[0].go,ZONE_MAX=78,ZONE_BONUS=20; /* ZONE_MAX = starting radius (map half-size is 116, so it is NOT the whole map) */
 const Z={cx:0,cz:0,r:ZONE_MAX,fx:0,fz:0,fr:ZONE_MAX,nx:0,nz:0,nr:ZONE_MAX,i:-1,st:'idle',dmg:2,next:false};
 const match={t:0,over:false,warned:false,phase:0};
 function zoneActive(){return started&&match.t>=ZONE_PH[0].pre}
@@ -445,7 +443,7 @@ function resetMatch(){
  if(!match.over)return;
  match.t=0;match.over=false;match.phase=0;endEl.hidden=true;zoneReset();
  pickup=null;pickupTimer=PICKUP_EVERY;lifeGroup.visible=false; clearWeapons();
- for(const p of players.values()){const sp=roadSpot0();p.x=sp.x;p.z=sp.z;p.angle=sp.a;p.speed=0;p.delta=0;p.lives=MAX_LIVES;p.wreck=0;p.inv=3;p.boost=100;p.item=null;p.ammo=0;p.stun=0;p.slip=0;p.chip=0;p.shield=0;p.score=0;p.kills=0;p.hits=0;p.top=0;p._zt=0;drawHearts(p);if(p.conn&&p.conn.open)p.conn.send({type:'again'})}
+ for(const p of players.values()){const sp=roadSpot();p.x=sp.x;p.z=sp.z;p.angle=sp.a;p.speed=0;p.delta=0;p.lives=MAX_LIVES;p.wreck=0;p.inv=3;p.boost=100;p.item=null;p.ammo=0;p.stun=0;p.slip=0;p.chip=0;p.shield=0;p.score=0;p.kills=0;p.hits=0;p.top=0;p._zt=0;drawHearts(p);if(p.conn&&p.conn.open)p.conn.send({type:'again'})}
  announce('NEW MATCH — GO!',2200);
 }
 function pickupLogic(dt){
@@ -463,11 +461,135 @@ const ITEM_EVERY=5,ITEM_MAX=8,MINE_MAX=30;
 const items=[],projs=[],mines=[],blasts=[];let itemTimer=2;
 const wrapA=a=>Math.atan2(Math.sin(a),Math.cos(a)),itemTex={};
 function emojiTex(e){if(itemTex[e])return itemTex[e];const c=document.createElement('canvas');c.width=c.height=96;const g=c.getContext('2d');g.font='64px sans-serif';g.textAlign='center';g.textBaseline='middle';g.fillText(e,48,52);const t=new THREE.CanvasTexture(c);t.colorSpace=THREE.SRGBColorSpace;return itemTex[e]=t}
+/* ---------- weapon pickup models: every weapon lies on the road as its OWN 3D object (spins + floats) ---------- */
+const WM=(()=>{
+ const P=Math.PI,H=P/2,gc={},mc={};
+ const G=(k,f)=>gc[k]||(gc[k]=f());
+ const cyl=(a,b,h,s=14)=>G('c'+a+'_'+b+'_'+h+'_'+s,()=>new THREE.CylinderGeometry(a,b,h,s));
+ const box=(x,y,z)=>G('b'+x+'_'+y+'_'+z,()=>new THREE.BoxGeometry(x,y,z));
+ const sph=(r,w=16,h=12)=>G('s'+r+'_'+w+'_'+h,()=>new THREE.SphereGeometry(r,w,h));
+ const cone=(r,h,s=12)=>G('n'+r+'_'+h+'_'+s,()=>new THREE.ConeGeometry(r,h,s));
+ const tor=(r,t,s=28)=>G('t'+r+'_'+t+'_'+s,()=>new THREE.TorusGeometry(r,t,10,s));
+ const mat=(c,o={})=>{const k=c+'_'+JSON.stringify(o);return mc[k]||(mc[k]=new THREE.MeshStandardMaterial({color:c,metalness:o.m??.35,roughness:o.r??.45,emissive:o.e??c,emissiveIntensity:o.ei??.22,side:o.d?THREE.DoubleSide:THREE.FrontSide}))};
+ const glow=(c,op=.8)=>{const k='g'+c+'_'+op;return mc[k]||(mc[k]=new THREE.MeshBasicMaterial({color:c,transparent:true,opacity:op,blending:THREE.AdditiveBlending,depthWrite:false,side:THREE.DoubleSide}))};
+ const add=(g,geo,m,x=0,y=0,z=0,rx=0,ry=0,rz=0)=>{const o=new THREE.Mesh(geo,m);o.position.set(x,y,z);o.rotation.set(rx,ry,rz);g.add(o);return o};
+ const wrap=(g,s)=>{g.scale.setScalar(s);return g};
+ const dark=mat(0x2a3037,{m:.5,r:.4}),steel=mat(0x8794a0,{m:.5,r:.3}),wood=mat(0x8a5a32,{m:.05,r:.7,ei:.12}),
+  yel=mat(0xffd23a,{e:0xffb800,ei:.7,m:.2}),red=mat(0xe03a2f,{e:0x801008,ei:.6}),white=mat(0xe6ebef,{m:.4,r:.3}),
+  cyan=mat(0x7ff4ff,{e:0x39e6ff,ei:1.5,m:.2}),purple=mat(0xc77dff,{e:0x9a3dff,ei:1.3,m:.2}),orange=mat(0xff7a2d,{e:0xff5a10,ei:1,m:.2}),
+  black=mat(0x14101c,{m:.9,r:.08,e:0x221a33,ei:.5});
+ /* a rocket lying along X, nose to +X (used by MISSILE and MISSILE SWARM) */
+ const rocket=(g,x,y,z,s,fl)=>{
+  add(g,cyl(.3*s,.3*s,2*s),white,x,y,z,0,0,H);
+  add(g,cone(.3*s,.8*s),red,x+1.4*s,y,z,0,0,-H);
+  add(g,cyl(.31*s,.31*s,.26*s),yel,x+.4*s,y,z,0,0,H);
+  add(g,box(.5*s,.9*s,.05*s),red,x-.85*s,y,z);
+  add(g,box(.5*s,.05*s,.9*s),red,x-.85*s,y,z);
+  if(fl)add(g,cone(.22*s,.9*s),glow(0xff9a3a,.85),x-1.45*s,y,z,0,0,H)};
+ const M={};
+ M.missile=()=>{const g=new THREE.Group();rocket(g,0,0,0,1.15,true);return wrap(g,1)};
+ M.swarm=()=>{const g=new THREE.Group();rocket(g,0,.3,0,.85,true);rocket(g,0,-.15,.28,.85,true);rocket(g,0,-.15,-.28,.85,true);
+  add(g,tor(.56,.05,20),yel,-.3,0,0,0,H,0);add(g,tor(.56,.05,20),yel,.5,0,0,0,H,0);return wrap(g,1)};
+ M.mine=()=>{const g=new THREE.Group(),m=new THREE.Group();g.add(m);
+  add(m,cyl(1.15,1.25,.32,24),dark);
+  add(m,cyl(.95,1.05,.16,24),mat(0x4a5a2c,{m:.3}),0,.24,0);
+  add(m,cyl(.55,.6,.14,20),red,0,.38,0);
+  add(m,cyl(.2,.2,.18,12),glow(0xff2a2a,1),0,.5,0);
+  for(let i=0;i<8;i++){const a=i/8*P*2;add(m,cone(.1,.32,8),steel,Math.cos(a)*1.05,.3,Math.sin(a)*1.05)}
+  add(m,tor(1.15,.07,28),yel,0,.12,0,H,0,0);
+  m.rotation.x=.5;return wrap(g,1.1)};
+ M.mg=()=>{const g=new THREE.Group();
+  add(g,box(1.5,.42,.36),dark);
+  add(g,box(1.52,.06,.38),yel,0,.2,0);
+  add(g,cyl(.15,.15,.9,12),dark,1.15,.08,0,0,0,H);
+  add(g,cyl(.07,.07,1.6,10),steel,1.6,.08,0,0,0,H);
+  add(g,cyl(.11,.11,.26,10),steel,2.4,.08,0,0,0,H);
+  add(g,cyl(.44,.44,.3,18),dark,.15,-.55,0,H,0,0);
+  add(g,cyl(.3,.3,.32,18),yel,.15,-.55,0,H,0,0);
+  add(g,box(.2,.55,.22),dark,-.5,-.45,0,0,0,.25);
+  add(g,box(.95,.3,.26),dark,-1.2,-.04,0);
+  add(g,box(.12,.5,.3),yel,-1.7,-.04,0);
+  add(g,box(.55,.1,.14),steel,.4,.28,0);
+  add(g,box(.1,.26,.1),steel,1.1,.3,0);
+  return wrap(g,.78)};
+ M.shotgun=()=>{const g=new THREE.Group();
+  add(g,cyl(.11,.11,2.6,12),steel,.75,.14,0,0,0,H);
+  add(g,cyl(.09,.09,2.0,12),steel,.5,-.08,0,0,0,H);
+  add(g,box(.85,.28,.34),wood,.55,-.12,0);
+  add(g,box(.95,.44,.3),dark,-.65,.02,0);
+  add(g,box(1.3,.36,.26),wood,-1.75,-.14,0,0,0,.13);
+  add(g,box(.1,.5,.3),dark,-2.4,-.2,0,0,0,.13);
+  for(const x of [-.85,-.6]){add(g,cyl(.085,.085,.38,10),red,x,.5,0);add(g,cyl(.09,.09,.1,10),yel,x,.3,0)}
+  add(g,sph(.09,8,6),orange,2.05,.28,0);
+  return wrap(g,.78)};
+ M.rail=()=>{const g=new THREE.Group();
+  add(g,box(1.3,.46,.42),dark,-.75,0,0);
+  add(g,box(2.8,.12,.12),steel,.85,.17,.2);add(g,box(2.8,.12,.12),steel,.85,.17,-.2);
+  add(g,cyl(.06,.06,2.8,8),cyan,.85,.17,0,0,0,H);
+  for(let i=0;i<4;i++)add(g,tor(.3,.06,20),cyan,.15+i*.5,.17,0,0,H,0);
+  add(g,cyl(.24,.24,.8,14),dark,-.85,.5,0,0,0,H);
+  add(g,tor(.25,.04,16),cyan,-.65,.5,0,0,H,0);add(g,tor(.25,.04,16),cyan,-1.05,.5,0,0,H,0);
+  add(g,box(.2,.55,.22),dark,-1.0,-.45,0,0,0,.2);
+  add(g,cone(.12,.4),cyan,2.45,.17,0,0,0,-H);
+  return wrap(g,.85)};
+ M.oil=()=>{const g=new THREE.Group();
+  add(g,cyl(.7,.7,1.5,20),dark);
+  add(g,cyl(.715,.715,.34,20),yel);
+  for(const y of [-.62,.62])add(g,tor(.71,.05,24),steel,0,y,0,H,0,0);
+  for(const y of [-.3,.3])add(g,tor(.71,.035,24),steel,0,y,0,H,0,0);
+  add(g,cyl(.2,.2,.12,10),steel,.2,.78,.1);
+  add(g,cyl(1.3,1.3,.05,28),black,0,-.78,0);
+  add(g,sph(.13,10,8),black,.62,.25,0).scale.set(1,1.6,1);
+  return wrap(g,1.05)};
+ M.emp=()=>{const g=new THREE.Group();
+  add(g,G('dish',()=>new THREE.SphereGeometry(1,24,12,0,P*2,0,H)),mat(0xaebdca,{m:.4,r:.35,d:true}),-.3,0,0,0,0,H);
+  add(g,cyl(.04,.04,1.2,8),steel,.3,0,0,0,0,H);
+  add(g,sph(.17,12,8),cyan,.95,0,0);
+  add(g,cyl(.1,.1,.7,10),dark,-.5,-1.2,0);
+  add(g,cyl(.5,.6,.12,16),dark,-.5,-1.6,0);
+  add(g,tor(.75,.035,36),glow(0x59f4ff,.7),1.5,0,0,0,H,0);
+  add(g,tor(1.1,.03,36),glow(0x59f4ff,.45),1.95,0,0,0,H,0);
+  g.position.y=0;return wrap(g,.85)};
+ M.grenade=()=>{const g=new THREE.Group(),ol=mat(0x3d5a2a,{m:.3,r:.5,e:0x16300a,ei:.5});
+  add(g,sph(.55,18,14),ol).scale.set(1,1.2,1);
+  for(const y of [-.28,.28])add(g,tor(.51,.03,24),steel,0,y,0,H,0,0);
+  add(g,tor(.565,.03,24),steel,0,0,0,H,0,0);
+  for(let i=0;i<2;i++)add(g,tor(.565,.028,28),ol,0,0,0,0,i*H,0).scale.y=1.2;
+  add(g,cyl(.2,.2,.24,12),steel,0,.74,0);
+  add(g,box(.1,.8,.06),steel,.3,.5,0,0,0,-.12);
+  add(g,tor(.17,.03,14),yel,-.12,.98,0);
+  return wrap(g,1.5)};
+ M.flame=()=>{const g=new THREE.Group(),tk=mat(0xc0332a,{e:0x600e08,ei:.5});
+  add(g,cyl(.42,.42,1.5,18),tk,-.95,0,0,0,0,H);
+  add(g,sph(.42,14,10),tk,-1.7,0,0).scale.x=.35;add(g,sph(.42,14,10),tk,-.2,0,0).scale.x=.35;
+  for(const x of [-1.5,-.4])add(g,tor(.43,.04,20),steel,x,0,0,0,H,0);
+  add(g,cyl(.1,.1,.25,8),steel,-.95,.52,0);
+  add(g,G('hose',()=>new THREE.TubeGeometry(new THREE.CatmullRomCurve3([new THREE.Vector3(-.95,.6,0),new THREE.Vector3(-.4,.95,0),new THREE.Vector3(.1,.55,0),new THREE.Vector3(.2,.2,0)]),20,.06,8)),dark);
+  add(g,box(.9,.32,.32),dark,.35,0,0);
+  add(g,cyl(.14,.09,1.1,10),steel,1.35,.04,0,0,0,H);
+  add(g,box(.18,.5,.2),dark,.2,-.4,0);
+  add(g,cone(.35,1.3),glow(0xff7a2d,.85),2.55,.04,0,0,0,-H);
+  add(g,cone(.18,.9),glow(0xffe08a,.95),2.35,.04,0,0,0,-H);
+  return wrap(g,.7)};
+ M.shock=()=>{const g=new THREE.Group();
+  add(g,sph(.38,16,12),purple);
+  [[1.35,.5],[1.05,.2],[.75,-.1],[.45,-.4]].forEach(([r,y])=>add(g,tor(r,.07,32),purple,0,y,0,H,0,0));
+  add(g,cone(.22,.55,12),purple,0,-.75,0,P,0,0);
+  add(g,tor(1.7,.03,40),glow(0xc77dff,.5),0,-.2,0,H,0,0);
+  return wrap(g,.95)};
+ M.turret=()=>{const g=new THREE.Group(),t=makeTurret();t.position.y=-.9;g.add(t);return wrap(g,.95)};
+ M.shield=()=>{const g=new THREE.Group();
+  const geo=G('shield',()=>{const s=new THREE.Shape();s.moveTo(-.9,.95);s.lineTo(.9,.95);s.lineTo(.9,.05);s.quadraticCurveTo(.9,-.8,0,-1.3);s.quadraticCurveTo(-.9,-.8,-.9,.05);s.lineTo(-.9,.95);
+   const e=new THREE.ExtrudeGeometry(s,{depth:.16,bevelEnabled:true,bevelSize:.08,bevelThickness:.06,bevelSegments:2,curveSegments:12});e.translate(0,0,-.08);return e});
+  add(g,geo,mat(0x2fd9a0,{m:.45,r:.3,e:0x14ffb0,ei:.7}),0,.17,0);
+  add(g,geo,white,0,.21,.1).scale.set(.62,.62,.6);
+  add(g,geo,white,0,.21,-.1,0,P,0).scale.set(.62,.62,.6);
+  return wrap(g,.95)};
+ return M})();
 function makeItemMesh(type){
  const g=new THREE.Group(),col=ARMS[type]?ARMS[type].col:0x6dffb0;
- const orb=new THREE.Mesh(new THREE.IcosahedronGeometry(.9,1),new THREE.MeshStandardMaterial({color:col,emissive:col,emissiveIntensity:1.3,roughness:.3,transparent:true,opacity:.85}));orb.position.y=2;g.add(orb);
- const ic=new THREE.Sprite(new THREE.SpriteMaterial({map:emojiTex(ARMS[type]?ARMS[type].ic:'🛡️'),transparent:true,depthWrite:false}));ic.scale.set(1.8,1.8,1);ic.position.y=2;g.add(ic);
- const glow=new THREE.Sprite(new THREE.SpriteMaterial({map:glowTex,color:col,transparent:true,depthWrite:false,blending:THREE.AdditiveBlending,opacity:.9}));glow.scale.set(8,8,1);glow.position.y=2;g.add(glow);
+ const orb=(WM[type]||WM.shield)();orb.position.y=2;g.add(orb);
+ const ic=new THREE.Sprite(new THREE.SpriteMaterial({map:glowTex,color:col,transparent:true,depthWrite:false,blending:THREE.AdditiveBlending,opacity:.5}));ic.scale.set(6.5,6.5,1);ic.position.y=2;g.add(ic);
  const pillar=new THREE.Mesh(new THREE.CylinderGeometry(.6,.6,30,14,1,true),new THREE.MeshBasicMaterial({color:col,transparent:true,opacity:.18,blending:THREE.AdditiveBlending,depthWrite:false,side:THREE.DoubleSide}));pillar.position.y=15;g.add(pillar);
  const ring=new THREE.Mesh(new THREE.RingGeometry(1.6,2.1,32),new THREE.MeshBasicMaterial({color:col,transparent:true,opacity:.7,blending:THREE.AdditiveBlending,depthWrite:false,side:THREE.DoubleSide}));ring.rotation.x=-Math.PI/2;ring.position.y=.06;g.add(ring);
  g.userData={orb,ic};return g}
