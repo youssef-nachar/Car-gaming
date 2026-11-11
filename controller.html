@@ -16,6 +16,8 @@
   <h1>Join the<br><em>city drive.</em></h1>
   <p>Enter the room code shown on the big screen, then turn your phone sideways.</p>
   <input id="name-input" placeholder="YOUR NAME (optional)" maxlength="14" autocomplete="off">
+  <div class="car-label">CHOOSE YOUR CAR</div>
+  <div id="car-pick" class="car-pick"></div>
   <input id="room-input" placeholder="RACE-1234" maxlength="20" autocomplete="off" autocapitalize="characters">
   <button id="join-btn">CONNECT TO GAME</button>
   <div id="status-msg">Waiting to connect…</div>
@@ -65,6 +67,7 @@
     </div>
   </section>
 </main>
+<div id="end" class="endscr" hidden><div><small>MATCH OVER</small><h2 id="end-title">YOU FINISHED</h2><div id="end-rank" class="end-rank">#1</div><p id="end-info"></p><button id="again-btn">PLAY AGAIN ▶</button></div></div>
 <div id="lost" class="lost" hidden><div>● RECONNECTING…<small>Keep this page open</small></div></div>
 <div class="rotate"><div>📱↻<br>ROTATE YOUR PHONE<small>Landscape mode gives you the full controller</small></div></div>
 <script src="./controller.js"></script>
